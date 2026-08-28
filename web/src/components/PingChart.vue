@@ -12,6 +12,26 @@ import 'chartjs-adapter-date-fns';
 // 与 p4.pw 一致：Chart.js 4.4.0 折线图，Y 轴 0-600ms，超时画到顶部尖峰
 const Y_MAX = 600;
 
+// hover 时在鼠标位置画一条竖线
+const verticalGuide = {
+  id: 'verticalGuide',
+  afterDatasetsDraw(chart: Chart) {
+    const active = chart.tooltip?.getActiveElements?.() || [];
+    if (!active.length) return;
+    const x = active[0].element.x;
+    const { top, bottom } = chart.chartArea;
+    const ctx = chart.ctx;
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(x, top);
+    ctx.lineTo(x, bottom);
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = 'rgba(0, 0, 0, .15)';
+    ctx.stroke();
+    ctx.restore();
+  }
+};
+
 export default defineComponent({
   name: 'PingChart',
   props: {
@@ -37,8 +57,8 @@ export default defineComponent({
       const n = props.values.length;
       return props.values.map((v, i) => ({
         x: (props.startTs - (n - 1 - i) * props.iv) * 1000,
-        y: v < 0 ? Y_MAX : Math.min(v, Y_MAX)
-      }));
+        y: v < 0 ? null : Math.min(v, Y_MAX)
+      })) as any;
     };
 
     const buildConfig = (): any => ({
@@ -49,6 +69,7 @@ export default defineComponent({
           borderColor: 'rgba(33, 186, 69, .85)',
           borderWidth: 1.5,
           pointRadius: 0,
+          spanGaps: false,
           fill: false,
           tension: 0
         }]
@@ -74,9 +95,9 @@ export default defineComponent({
                 const p = (v: number) => String(v).padStart(2, '0');
                 return `${p(d.getHours())}:${p(d.getMinutes())}`;
               },
-              label: (item: { parsed: { y: number } }) => {
+              label: (item: { parsed: { y: number | null } }) => {
                 const y = item.parsed.y;
-                return y >= Y_MAX ? '超时' : `${y}ms`;
+                return y === null ? '超时' : `${y}ms`;
               }
             }
           }
@@ -100,7 +121,7 @@ export default defineComponent({
 
     onMounted(() => {
       if (!el.value) return;
-      chart = new Chart(el.value, buildConfig());
+      chart = new Chart(el.value, { ...buildConfig(), plugins: [verticalGuide] });
       window.setTimeout(() => {
         ready.value = true;
       }, 60);

@@ -45,6 +45,18 @@
     <td colspan="11">
       <div class="expand-inner" :class="{collapsed}" :style="{'max-height': getStatus ? '' : '0'}">
         <div id="expand_cpu">CPU: {{ getStatus ? cpuModel : '–' }}</div>
+        <div id="expand_mem">内存信息: {{
+            getStatus ? `${expandRowByteConvert(server.memory_used * 1024)} / ${expandRowByteConvert(server.memory_total * 1024)}` : '–'
+          }}
+        </div>
+        <div id="expand_swap">交换分区: {{
+            getStatus ? `${expandRowByteConvert(server.swap_used * 1024)} / ${expandRowByteConvert(server.swap_total * 1024)}` : '–'
+          }}
+        </div>
+        <div id="expand_hdd">硬盘信息: {{
+            getStatus ? `${expandRowByteConvert(server.hdd_used * 1024 * 1024)} / ${expandRowByteConvert(server.hdd_total * 1024 * 1024)}` : '–'
+          }}
+        </div>
         <div class="ping-panel" v-if="getStatus && currentSeries" @click.stop>
           <div class="ping-head">
             <div class="ping-tabs">

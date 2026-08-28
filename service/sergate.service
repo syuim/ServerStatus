@@ -1,0 +1,13 @@
+[Unit]
+Description=ServerStatus Server
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/ServerStatus/server/sergate --config=/usr/local/ServerStatus/server/config.json --web-dir=/usr/local/ServerStatus/web --port=35601
+WorkingDirectory=/usr/local/ServerStatus/server
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
