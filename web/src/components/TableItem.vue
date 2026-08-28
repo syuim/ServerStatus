@@ -8,7 +8,7 @@
     </td>
     <td>{{ server.name }}</td>
     <td>{{ osName }}</td>
-    <td>{{ server.location }}</td>
+    <td>{{ locationName }}</td>
     <td>{{ server.uptime || '–' }}</td>
     <td>{{ getStatus ? server.load : '-' }}</td>
     <td>{{
@@ -100,6 +100,7 @@ interface CustomData {
   cpu_model?: string;
   cores?: number;
   tags?: CustomTag[];
+  loc?: string;
   ping?: Record<string, number[]>;
 }
 
@@ -131,6 +132,10 @@ export default defineComponent({
     const osName = computed(() => {
       const d = customData.value;
       return d && d.os ? d.os : '–';
+    });
+    const locationName = computed(() => {
+      const d = customData.value;
+      return (d && d.loc) ? d.loc : (props.server.location || '–');
     });
     const tags = computed<CustomTag[]>(() => {
       const d = customData.value;
@@ -172,6 +177,7 @@ export default defineComponent({
     const activeLossText = computed(() => activeLoss.value === '–' ? '–' : `${activeLoss.value}%`);
     return {
       collapsed,
+      locationName,
       cpuModel,
       osName,
       tags,

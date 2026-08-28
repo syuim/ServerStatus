@@ -32,6 +32,39 @@ PING_TARGETS = [
 PING_INTERVAL = 60   # 每轮 TCPing 间隔（秒）
 PING_TIMEOUT = 3
 PING_HISTORY = 15    # 保留的历史点数；custom 字段上限 512 字节，含时间戳后不宜增大
+LOCATION_REFRESH = 21600  # 位置信息刷新间隔（秒），6 小时
+
+_location = None
+_location_ts = 0
+
+
+def get_location():
+    """按出口 IP 查询位置（中文优先），结果缓存 LOCATION_REFRESH 秒"""
+    global _location, _location_ts
+    now = time.time()
+    if _location is not None and now - _location_ts < LOCATION_REFRESH:
+        return _location
+    _location = ''
+    _location_ts = now
+    try:
+        import urllib.request
+        req = urllib.request.Request(
+            'http://ip-api.com/json/?lang=zh-CN&fields=status,country,city',
+            headers={'User-Agent': 'curl/7.0'})
+        data = json.load(urllib.request.urlopen(req, timeout=8))
+        if data.get('status') == 'success':
+            _location = ' '.join(x for x in (data.get('country'), data.get('city')) if x)
+            return _location
+    except Exception:
+        pass
+    try:
+        import urllib.request
+        data = json.load(urllib.request.urlopen('https://ipinfo.io/json', timeout=8))
+        if data.get('country'):
+            _location = ' '.join(x for x in (data.get('country'), data.get('city')) if x)
+    except Exception:
+        pass
+    return _location
 
 
 def get_os():
@@ -59,7 +92,7 @@ def get_custom():
                     cores += 1
     except IOError:
         pass
-    data = {'os': get_os(), 'cpu_model': cpu_model, 'cores': cores, 'tags': TAGS}
+    data = {'os': get_os(), 'cpu_model': cpu_model, 'cores': cores, 'tags': TAGS, 'loc': get_location()}
     if PING_TARGETS:
         data['ping'] = ping_collector.summary()
         # custom 字段服务端上限 512 字节，超限时缩减各线历史点数
