@@ -9,7 +9,7 @@ PORT="${PORT:-35601}"
 # 注意: 不能叫 USER，会与 shell 内置 $USER 冲突
 SS_USER="${SS_USER:-suyu}"
 KEY="${KEY:-68f30717b2bf0a5d33ed7a53c8f40bff}"
-NAME="${NAME:-$(hostname)}"
+NAME="${NAME:-}"
 TAGS="${TAGS:-}"
 REPO="syuim/ServerStatus"
 BRANCH="master"
@@ -72,6 +72,38 @@ src = open(path, encoding='utf-8').read()
 src = re.sub(r'TAGS = \[.*?\]', 'TAGS = ' + tags, src, count=1, flags=re.S)
 open(path, 'w', encoding='utf-8').write(src)
 PYEOF
+fi
+
+echo ">> 配置服务端节点 ..."
+SERVER_CONFIG="/usr/local/ServerStatus/server/config.json"
+if [[ -f "$SERVER_CONFIG" ]]; then
+  $PYTHON - "$SERVER_CONFIG" "$SS_USER" "$KEY" "$NAME" <<'PYEOF'
+import json
+import socket
+import sys
+path, user, key, name = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
+with open(path) as f:
+    cfg = json.load(f)
+servers = cfg.setdefault('servers', [])
+for s in servers:
+    if s.get('username') == user:
+        s['password'] = key
+        if name:
+            s['name'] = name
+        print("   节点 %s 已存在，密钥已更新%s" % (user, '，节点名替换为 %s' % name if name else ''))
+        break
+else:
+    servers.append({
+        'username': user, 'password': key, 'name': name or socket.gethostname(),
+        'type': 'KVM', 'host': '', 'location': '', 'disabled': False, 'region': ''
+    })
+    print("   节点 %s 不存在，已添加 (name=%s)" % (user, name or socket.gethostname()))
+with open(path, 'w') as f:
+    json.dump(cfg, f, indent=1)
+PYEOF
+  systemctl restart sergate 2>/dev/null || true
+else
+  echo "   未检测到本机服务端，跳过"
 fi
 
 echo ">> 安装 systemd 服务 ..."
