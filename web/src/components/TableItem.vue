@@ -429,7 +429,9 @@ div.progress {
   display: inline-block;
   overflow: hidden;
   height: 22px;
-  width: 50px;
+  width: 100%;
+  min-width: 40px;
+  max-width: 120px;
   border-radius: 6px;
   background: rgba(0, 0, 0, .1);
   margin-bottom: 0 !important;
@@ -442,13 +444,16 @@ div.progress div.bar {
   line-height: 22px;
   /* 深色文字：进度不满时溢出到白色背景部分依然可读 */
   color: rgba(0, 0, 0, .62);
-  text-align: center;
+  text-align: left;
+  padding-left: .4em;
   white-space: nowrap;
   transition: width .1s ease, background-color .1s ease;
 }
 
 div.progress div.bar.bar--solid {
   color: #fff;
+  text-align: center;
+  padding-left: 0;
 }
 
 div.progress.success div.bar {
