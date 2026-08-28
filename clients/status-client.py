@@ -217,14 +217,15 @@ class TrafficTracker(object):
             pass
 
     def _vnstat_total(self):
-        # 读取 vnstat 至今总流量 (rx, tx) 字节；vnstat 未装/无数据时返回 None
+        # 读取 vnstat 全部时间总流量 (rx, tx) 字节；字段 12/13 为 all-time，
+        # 8/9 是本月流量不可用作总流量基值；vnstat 未装/无数据时返回 None
         try:
             out = os.popen('vnstat --oneline b').readline()
             if not out or 'Not enough data available yet' in out:
                 return None
             v_data = out.split(';')
-            if len(v_data) > 10:
-                return int(v_data[8]), int(v_data[9])
+            if len(v_data) > 14:
+                return int(v_data[12]), int(v_data[13])
         except Exception:
             pass
         return None
