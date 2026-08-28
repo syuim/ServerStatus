@@ -23,11 +23,18 @@ TAGS = [
     {"text": "NODE"},
 ]
 
-# Ping 目标（名称, 主机, 端口）：三网探测点；无 ping 命令时 TCP 回退用指定端口
+# Ping 目标（名称, 主机, 端口, 地址族）：三网双栈 + 公共 DNS 双栈探测；无 IPv6 出站时会超时
 PING_TARGETS = [
-    ('CT', 'ct.127315.xyz', 80),  # 电信
-    ('CU', 'cu.127315.xyz', 80),  # 联通
-    ('CM', 'cm.127315.xyz', 80),  # 移动
+    ('CT', 'zj-ct-dualstack.ip.zstaticcdn.com', 80, socket.AF_INET),
+    ('CT6', 'zj-ct-dualstack.ip.zstaticcdn.com', 80, socket.AF_INET6),
+    ('CU', 'zj-cu-dualstack.ip.zstaticcdn.com', 80, socket.AF_INET),
+    ('CU6', 'zj-cu-dualstack.ip.zstaticcdn.com', 80, socket.AF_INET6),
+    ('CM', 'zj-cm-dualstack.ip.zstaticcdn.com', 80, socket.AF_INET),
+    ('CM6', 'zj-cm-dualstack.ip.zstaticcdn.com', 80, socket.AF_INET6),
+    ('CF', '1.1.1.1', 443, socket.AF_INET),
+    ('CF6', '2606:4700:4700::1111', 443, socket.AF_INET6),
+    ('GO', '8.8.8.8', 443, socket.AF_INET),
+    ('GO6', '2001:4860:4860::8888', 443, socket.AF_INET6),
 ]
 PING_INTERVAL = 60   # 每轮 TCPing 间隔（秒）
 PING_TIMEOUT = 3
@@ -114,7 +121,7 @@ class PingCollector(object):
     """后台线程定期 TCPing 各目标（TCP 连接耗时毫秒，-1 表示失败），保留最近 N 轮延迟"""
 
     def __init__(self):
-        self.results = dict((name, deque(maxlen=PING_HISTORY)) for name, _, _ in PING_TARGETS)
+        self.results = dict((name, deque(maxlen=PING_HISTORY)) for name, _, _, _ in PING_TARGETS)
         self.last_ts = 0
         self.lock = threading.Lock()
         self._stop = threading.Event()
@@ -123,10 +130,13 @@ class PingCollector(object):
             t.daemon = True
             t.start()
 
-    def _tcping(self, host, port):
+    def _tcping(self, host, port, family):
         start = time.time()
         try:
-            socket.create_connection((host, port), PING_TIMEOUT).close()
+            sock = socket.socket(family, socket.SOCK_STREAM)
+            sock.settimeout(PING_TIMEOUT)
+            sock.connect((host, port))
+            sock.close()
             return int(round((time.time() - start) * 1000))
         except Exception:
             return -1
@@ -134,8 +144,8 @@ class PingCollector(object):
     def _run(self):
         while not self._stop.is_set():
             ts = int(time.time())
-            for name, host, port in PING_TARGETS:
-                ms = self._tcping(host, port)
+            for name, host, port, family in PING_TARGETS:
+                ms = self._tcping(host, port, family)
                 with self.lock:
                     self.results[name].append(ms)
                     self.last_ts = ts
