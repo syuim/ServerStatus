@@ -39,7 +39,7 @@ _location_ts = 0
 
 
 def get_location():
-    """按出口 IP 查询位置（中文优先），结果缓存 LOCATION_REFRESH 秒"""
+    """按出口 IP 查询国家代码（如 US），结果缓存 LOCATION_REFRESH 秒"""
     global _location, _location_ts
     now = time.time()
     if _location is not None and now - _location_ts < LOCATION_REFRESH:
@@ -49,11 +49,11 @@ def get_location():
     try:
         import urllib.request
         req = urllib.request.Request(
-            'http://ip-api.com/json/?lang=zh-CN&fields=status,country,city',
+            'http://ip-api.com/json/?fields=status,countryCode',
             headers={'User-Agent': 'curl/7.0'})
         data = json.load(urllib.request.urlopen(req, timeout=8))
-        if data.get('status') == 'success':
-            _location = ' '.join(x for x in (data.get('country'), data.get('city')) if x)
+        if data.get('status') == 'success' and data.get('countryCode'):
+            _location = data['countryCode']
             return _location
     except Exception:
         pass
@@ -61,7 +61,7 @@ def get_location():
         import urllib.request
         data = json.load(urllib.request.urlopen('https://ipinfo.io/json', timeout=8))
         if data.get('country'):
-            _location = ' '.join(x for x in (data.get('country'), data.get('city')) if x)
+            _location = data['country']
     except Exception:
         pass
     return _location
