@@ -57,7 +57,9 @@
             getStatus ? `${expandRowByteConvert(server.hdd_used * 1024 * 1024)} / ${expandRowByteConvert(server.hdd_total * 1024 * 1024)}` : '–'
           }}
         </div>
-        <div class="ping-panel" v-if="getStatus && currentSeries" @click.stop>
+        <div id="expand_traffic_period">周期流量: {{ getStatus ? trafficPeriodText : '–' }}</div>
+        <div id="expand_traffic_total">总流量: {{ getStatus ? trafficTotalText : '–' }}</div>
+        <div class="ping-panel" v-if="getStatus && !collapsed && currentSeries" @click.stop>
           <div class="ping-head">
             <div class="ping-tabs">
               <button v-for="s in pingSeries" :key="s.name" type="button"
@@ -91,6 +93,7 @@ interface CustomData {
   cores?: number;
   loc?: string;
   ping?: Record<string, number[]>;
+  traffic?: { pr?: number; pt?: number; tr?: number; tt?: number; rd?: number };
 }
 
 export default defineComponent({
@@ -131,6 +134,23 @@ export default defineComponent({
     const locationName = computed(() => {
       const d = customData.value;
       return (d && d.loc) ? d.loc : (props.server.location || '–');
+    });
+    const traffic = computed(() => {
+      const d = customData.value;
+      return d && d.traffic ? d.traffic : null;
+    });
+    const trafficPeriodText = computed(() => {
+      const t = traffic.value;
+      if (!t) return '–';
+      const fmt = utils.expandRowByteConvert.value;
+      const day = t.rd && t.rd > 0 ? ` · 每月${t.rd}号重置` : '';
+      return `↑ ${fmt(t.pr || 0)} ↓ ${fmt(t.pt || 0)}${day}`;
+    });
+    const trafficTotalText = computed(() => {
+      const t = traffic.value;
+      if (!t) return '–';
+      const fmt = utils.expandRowByteConvert.value;
+      return `↑ ${fmt(t.tr || 0)} ↓ ${fmt(t.tt || 0)}`;
     });
     const pingSeries = computed(() => {
       const d = customData.value;
@@ -194,6 +214,8 @@ export default defineComponent({
       locationName,
       cpuModel,
       osName,
+      trafficPeriodText,
+      trafficTotalText,
       pingSeries,
       activePing,
       currentSeries,
@@ -368,6 +390,8 @@ div.progress div.bar {
   font-size: .85rem;
   line-height: 22px;
   color: white;
+  text-align: center;
+  white-space: nowrap;
   transition: width .1s ease, background-color .1s ease;
 }
 

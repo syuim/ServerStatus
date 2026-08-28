@@ -8,9 +8,11 @@ import re
 import os
 import sys
 import json
+import calendar
 import subprocess
 import threading
 from collections import deque
+from datetime import datetime
 
 SERVER = "rn.127315.xyz"
 PORT = 35601
@@ -23,7 +25,7 @@ TAGS = [
     {"text": "NODE"},
 ]
 
-# Ping 目标（名称, 主机, 端口, 地址族）：三网双栈 + 公共 DNS 双栈探测；无 IPv6 出站时会超时
+# Ping 目标（名称, 主机, 端口, 地址族）：三网双栈 + 公共 DNS 单栈探测；无对应出站时超时
 PING_TARGETS = [
     ('CT', 'zj-ct-dualstack.ip.zstaticcdn.com', 80, socket.AF_INET),
     ('CT6', 'zj-ct-dualstack.ip.zstaticcdn.com', 80, socket.AF_INET6),
@@ -32,14 +34,16 @@ PING_TARGETS = [
     ('CM', 'zj-cm-dualstack.ip.zstaticcdn.com', 80, socket.AF_INET),
     ('CM6', 'zj-cm-dualstack.ip.zstaticcdn.com', 80, socket.AF_INET6),
     ('CF', '1.1.1.1', 443, socket.AF_INET),
-    ('CF6', '2606:4700:4700::1111', 443, socket.AF_INET6),
     ('GO', '8.8.8.8', 443, socket.AF_INET),
-    ('GO6', '2001:4860:4860::8888', 443, socket.AF_INET6),
 ]
 PING_INTERVAL = 60   # 每轮 TCPing 间隔（秒）
 PING_TIMEOUT = 3
 PING_HISTORY = 15    # 保留的历史点数；custom 字段上限 512 字节，含时间戳后不宜增大
 LOCATION_REFRESH = 21600  # 位置信息刷新间隔（秒），6 小时
+
+# 周期流量每月几号重置（1-28 安全，大于当月天数时按当月最后一天）；总流量永久累计
+TRAFFIC_RESET_DAY = 1
+TRAFFIC_STATE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'traffic.json')
 
 _location = None
 _location_ts = 0
@@ -100,6 +104,7 @@ def get_custom():
     except IOError:
         pass
     data = {'os': get_os(), 'cpu_model': cpu_model, 'cores': cores, 'tags': TAGS, 'loc': get_location()}
+    data['traffic'] = traffic_tracker.summary()
     if PING_TARGETS:
         data['ping'] = ping_collector.summary()
         # custom 字段服务端上限 512 字节，超限时缩减各线历史点数
@@ -169,6 +174,102 @@ def check_interface(net_name):
     net_name = net_name.strip()
     invalid_name = ['lo', 'tun', 'kube', 'docker', 'vmbr', 'br-', 'vnet', 'veth']
     return not any(name in net_name for name in invalid_name)
+
+
+class TrafficTracker(object):
+    """流量累计：周期流量每月 TRAFFIC_RESET_DAY 号自动重置，总流量永久累计；状态持久化到本地文件"""
+
+    _net_re = re.compile(r'([^\s]+):[\s]*(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)')
+
+    def __init__(self, state_file=TRAFFIC_STATE_FILE, reset_day=TRAFFIC_RESET_DAY):
+        self.state_file = state_file
+        self.reset_day = reset_day
+        self.state = {'total_rx': 0, 'total_tx': 0, 'period_rx': 0, 'period_tx': 0, 'period_start': ''}
+        self.last_rx = None
+        self.last_tx = None
+        self._last_save = 0
+        self._load()
+
+    def _load(self):
+        try:
+            with open(self.state_file) as f:
+                self.state.update(json.load(f))
+        except Exception:
+            pass
+
+    def _save(self):
+        try:
+            tmp = self.state_file + '.tmp'
+            with open(tmp, 'w') as f:
+                json.dump(self.state, f)
+            os.rename(tmp, self.state_file)
+        except Exception:
+            pass
+
+    def _read_counters(self):
+        rx = 0
+        tx = 0
+        try:
+            with open('/proc/net/dev') as f:
+                for line in f.readlines():
+                    info = self._net_re.findall(line)
+                    if info and check_interface(info[0][0]):
+                        rx += int(info[0][1])
+                        tx += int(info[0][9])
+        except IOError:
+            pass
+        return rx, tx
+
+    def _period_start(self, now):
+        # 当前周期起点：最近一个 reset_day 且不晚于 now；大于当月天数时按当月最后一天
+        try:
+            start = datetime(now.year, now.month, self.reset_day)
+        except ValueError:
+            start = datetime(now.year, now.month, calendar.monthrange(now.year, now.month)[1])
+        if start > now:
+            prev_month = now.month - 1 or 12
+            prev_year = now.year - (1 if now.month == 1 else 0)
+            try:
+                start = datetime(prev_year, prev_month, self.reset_day)
+            except ValueError:
+                start = datetime(prev_year, prev_month, calendar.monthrange(prev_year, prev_month)[1])
+        return start.strftime('%Y-%m-%d')
+
+    def update(self):
+        rx, tx = self._read_counters()
+        now = datetime.now()
+        if self.last_rx is not None and rx >= self.last_rx and tx >= self.last_tx:
+            drx, dtx = rx - self.last_rx, tx - self.last_tx
+        else:
+            # 首次运行或网卡计数重置（重启/换网卡）：只重建基线，不计流量
+            drx, dtx = 0, 0
+        self.last_rx, self.last_tx = rx, tx
+        pstart = self._period_start(now)
+        if pstart != self.state.get('period_start'):
+            self.state['period_start'] = pstart
+            self.state['period_rx'] = 0
+            self.state['period_tx'] = 0
+        self.state['total_rx'] += drx
+        self.state['total_tx'] += dtx
+        self.state['period_rx'] += drx
+        self.state['period_tx'] += dtx
+        if time.time() - self._last_save >= 10:
+            self._save()
+            self._last_save = time.time()
+        return self.state
+
+    def summary(self):
+        self.update()
+        return {
+            'pr': int(self.state['period_rx']),
+            'pt': int(self.state['period_tx']),
+            'tr': int(self.state['total_rx']),
+            'tt': int(self.state['total_tx']),
+            'rd': self.reset_day,
+        }
+
+
+traffic_tracker = TrafficTracker()
 
 
 def get_uptime():

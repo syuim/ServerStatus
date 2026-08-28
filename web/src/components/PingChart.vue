@@ -9,8 +9,12 @@ import { defineComponent, PropType, ref, watch, onMounted, onBeforeUnmount } fro
 import Chart from 'chart.js/auto';
 import 'chartjs-adapter-date-fns';
 
-// 与 p4.pw 一致：Chart.js 4.4.0 折线图，Y 轴 0-600ms，超时画到顶部尖峰
-const Y_MAX = 600;
+// 折线图：超时断线，Y 轴按实际延迟值自适应（向上取整到 50ms 档，最低 100ms）
+const getYMax = (values: number[]) => {
+  const valid = values.filter(v => v >= 0);
+  if (!valid.length) return 200;
+  return Math.max(Math.ceil(Math.max(...valid) / 50) * 50, 100);
+};
 
 // hover 时在鼠标位置画一条竖线，左右移动时平滑过渡
 let targetX: number | null = null;
@@ -89,7 +93,7 @@ export default defineComponent({
       const n = props.values.length;
       return props.values.map((v, i) => ({
         x: (props.startTs - (n - 1 - i) * props.iv) * 1000,
-        y: v < 0 ? null : Math.min(v, Y_MAX)
+        y: v < 0 ? null : v
       })) as any;
     };
 
@@ -158,7 +162,7 @@ export default defineComponent({
           },
           y: {
             min: 0,
-            max: Y_MAX,
+            max: getYMax(props.values),
             grid: { color: 'rgba(0,0,0,.06)', borderDash: [3, 3] },
             ticks: {
               color: '#9da2a6',
@@ -176,7 +180,7 @@ export default defineComponent({
       chart = new Chart(el.value, { ...buildConfig(), plugins: [verticalGuide] });
       window.setTimeout(() => {
         ready.value = true;
-      }, 60);
+      }, 420);
     });
 
     watch(
@@ -184,6 +188,7 @@ export default defineComponent({
       () => {
         if (!chart) return;
         chart.data.datasets[0].data = buildData();
+        (chart.options.scales as any).y.max = getYMax(props.values);
         chart.update('none');
       }
     );

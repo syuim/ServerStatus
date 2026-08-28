@@ -208,7 +208,15 @@ div.bar {
 }
 
 @media only screen and (max-width: 910px) {
-  #location, tr td:nth-child(4) {
+  #uptime, tr td:nth-child(5) {
+    display: none;
+  }
+
+  #load, tr td:nth-child(6) {
+    display: none;
+  }
+
+  #traffic, tr td:nth-child(8) {
     display: none;
   }
 }
@@ -217,39 +225,15 @@ div.bar {
   html, body {
     font-size: 12px;
   }
-
-  #servers div.progress {
-    width: 40px;
-  }
 }
 
+/* 移动端只保留: 运行状态 / 节点名 / 服务器位置 / 网络 */
 @media only screen and (max-width: 720px) {
-  #uptime, tr td:nth-child(5) {
+  #cpu, tr td:nth-child(9) {
     display: none;
   }
-}
 
-@media only screen and (max-width: 660px) {
-  #load, tr td:nth-child(6) {
-    display: none;
-  }
-}
-
-@media only screen and (max-width: 600px) {
-  #network, tr td:nth-child(7) {
-    display: none;
-  }
-}
-
-@media only screen and (max-width: 533px) {
-  #name, tr td:nth-child(2) {
-    min-width: 20px;
-    max-width: 60px;
-    text-overflow: ellipsis;
-    overflow: hidden;
-  }
-
-  #traffic, tr td:nth-child(8) {
+  #ram, tr td:nth-child(10) {
     display: none;
   }
 
@@ -257,9 +241,11 @@ div.bar {
     display: none;
   }
 
-  #cpu, #ram {
+  #name, tr td:nth-child(2) {
     min-width: 20px;
-    max-width: 40px;
+    max-width: 60px;
+    text-overflow: ellipsis;
+    overflow: hidden;
   }
 }
 </style>
