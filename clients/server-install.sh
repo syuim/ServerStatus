@@ -84,6 +84,8 @@ echo ">> 安装 systemd 服务 ..."
 if ! curl -sSL --fail --connect-timeout 8 -o /etc/systemd/system/sergate.service "$RAW/service/sergate.service"; then
   wget -q --no-check-certificate --timeout=8 -O /etc/systemd/system/sergate.service "$RAW/service/sergate.service"
 fi
+# 按实际安装路径修正 service 文件（支持 CONFIG_DIR / WEB_DIR 覆盖）
+sed -i "s|/usr/local/ServerStatus/server/sergate|$DIR/sergate|g; s|/usr/local/ServerStatus/server/config.json|$DIR/config.json|g; s|/usr/local/ServerStatus/web|$WEB_DIR|g; s|WorkingDirectory=/usr/local/ServerStatus/server|WorkingDirectory=$DIR|" /etc/systemd/system/sergate.service
 systemctl daemon-reload
 systemctl enable sergate >/dev/null 2>&1
 systemctl restart sergate

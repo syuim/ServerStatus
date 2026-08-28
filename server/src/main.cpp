@@ -572,11 +572,13 @@ void CMain::JSONUpdateThread(void *pUser)
 				pBuf += strlen(pBuf);
 			}
 		}
+		// 收尾：有节点输出时覆盖最后一个 ",\n"；空列表时保留 "["
+		char *pTail = pBuf > aFileBuf + 15 ? pBuf - 2 : pBuf;
 		if(!m_pJSONUpdateThreadData->m_ReloadRequired)
-			str_format(pBuf - 2, sizeof(aFileBuf) - (pBuf - aFileBuf), "\n],\n\"updated\": \"%lld\"\n}", (long long)time(/*ago*/0));
+			str_format(pTail, sizeof(aFileBuf) - (pTail - aFileBuf), "\n],\n\"updated\": \"%lld\"\n}", (long long)time(/*ago*/0));
 		else
 		{
-			str_format(pBuf - 2, sizeof(aFileBuf) - (pBuf - aFileBuf), "\n],\n\"updated\": \"%lld\",\n\"reload\": true\n}", (long long)time(/*ago*/0));
+			str_format(pTail, sizeof(aFileBuf) - (pTail - aFileBuf), "\n],\n\"updated\": \"%lld\",\n\"reload\": true\n}", (long long)time(/*ago*/0));
 			m_pJSONUpdateThreadData->m_ReloadRequired--;
 		}
 		pBuf += strlen(pBuf);
