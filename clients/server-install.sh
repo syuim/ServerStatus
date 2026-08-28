@@ -20,16 +20,18 @@ SRC_FILES=(
   "server/include/system.h"
   "server/include/argparse.h"
   "server/include/json.h"
-  "server/include/server.h"
-  "server/include/main.h"
   "server/src/argparse.c"
   "server/src/json.c"
   "server/src/system.c"
   "server/src/main.cpp"
+  "server/src/main.h"
   "server/src/netban.cpp"
+  "server/src/netban.h"
   "server/src/network_client.cpp"
   "server/src/network.cpp"
+  "server/src/network.h"
   "server/src/server.cpp"
+  "server/src/server.h"
 )
 
 fetch() { # fetch <url> <输出文件>
