@@ -62,7 +62,7 @@
               tag.text
             }}</span>
         </div>
-        <div class="ping-panel" v-if="getStatus && pingSeries.length" @click.stop>
+        <div class="ping-panel" v-if="getStatus && currentSeries" @click.stop>
           <div class="ping-head">
             <div class="ping-tabs">
               <button v-for="s in pingSeries" :key="s.name" type="button"
@@ -76,16 +76,7 @@
             </div>
           </div>
           <div class="ping-chart-wrap">
-            <svg class="ping-chart" :viewBox="`0 0 ${CHART_W} ${CHART_H}`" preserveAspectRatio="none">
-              <g v-for="gy in gridYs" :key="gy">
-                <line :x1="0" :y1="gy" :x2="CHART_W" :y2="gy" class="grid-line"/>
-              </g>
-              <rect v-for="b in activeBars" :key="b.i" :x="b.x" :y="b.y" :width="b.w" :height="b.h" class="ping-bar"/>
-            </svg>
-            <div class="ping-axis" v-if="axisStart && axisEnd">
-              <span>{{ axisStart }}</span>
-              <span>{{ axisEnd }}</span>
-            </div>
+            <ping-chart :values="currentSeries.values" :start-ts="currentSeries.startTs" :iv="currentSeries.iv"/>
           </div>
         </div>
       </div>
@@ -96,6 +87,7 @@
 <script lang="ts">
 import { defineComponent, ref, computed, PropType } from 'vue';
 import useStatus from './useStatus';
+import PingChart from './PingChart.vue';
 import { StatusItem } from '@/types';
 
 interface CustomTag {
@@ -110,9 +102,6 @@ interface CustomData {
   tags?: CustomTag[];
   ping?: Record<string, number[]>;
 }
-
-const CHART_W = 560;
-const CHART_H = 200;
 
 export default defineComponent({
   name: 'TableItem',
@@ -181,50 +170,6 @@ export default defineComponent({
     });
     const activeAvgText = computed(() => activeAvg.value === '–' ? '–' : `${activeAvg.value}ms`);
     const activeLossText = computed(() => activeLoss.value === '–' ? '–' : `${activeLoss.value}%`);
-    const fmtTime = (ts: number) => {
-      const d = new Date(ts * 1000);
-      const p = (n: number) => String(n).padStart(2, '0');
-      return `${p(d.getHours())}:${p(d.getMinutes())}`;
-    };
-    const axisStart = computed(() => {
-      const s = currentSeries.value;
-      if (!s || !s.startTs || s.values.length < 2) return '';
-      return fmtTime(s.startTs - (s.values.length - 1) * s.iv);
-    });
-    const axisEnd = computed(() => {
-      const s = currentSeries.value;
-      if (!s || !s.startTs || s.values.length < 2) return '';
-      return fmtTime(s.startTs);
-    });
-    const yScale = computed(() => {
-      const vals = validValues.value;
-      const max = vals.length ? Math.max(...vals) : 0;
-      return Math.max(50, Math.ceil(max / 100) * 100);
-    });
-    const gridYs = computed(() => {
-      const step = yScale.value / 4;
-      return [1, 2, 3].map(i => Math.round(CHART_H - (i * step) / yScale.value * CHART_H));
-    });
-    const activeBars = computed(() => {
-      const s = currentSeries.value;
-      if (!s) return [];
-      const n = s.values.length;
-      const slot = CHART_W / n;
-      const barW = Math.max(2, slot * 0.55);
-      const bars: Array<{ i: number; x: number; y: number; w: number; h: number }> = [];
-      s.values.forEach((v, i) => {
-        if (v < 0) return;
-        const h = Math.min(v / yScale.value, 1) * (CHART_H - 20);
-        bars.push({
-          i,
-          x: i * slot + (slot - barW) / 2,
-          y: CHART_H - 16 - h,
-          w: barW,
-          h
-        });
-      });
-      return bars;
-    });
     return {
       collapsed,
       cpuModel,
@@ -232,16 +177,14 @@ export default defineComponent({
       tags,
       pingSeries,
       activePing,
+      currentSeries,
       activeAvgText,
       activeLossText,
-      axisStart,
-      axisEnd,
-      activeBars,
-      gridYs,
-      CHART_W,
-      CHART_H,
       ...utils
     };
+  },
+  components: {
+    PingChart
   }
 });
 </script>
@@ -361,38 +304,6 @@ tr.expandRow td {
   font-weight: 700;
   line-height: 1;
   padding: 5.5px 9px;
-}
-
-.ping-chart-wrap {
-  position: relative;
-}
-
-.ping-chart {
-  display: block;
-  width: 100%;
-  height: 200px;
-}
-
-.ping-axis {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 2px;
-  display: flex;
-  justify-content: space-between;
-  font-size: 11px;
-  color: #9da2a6;
-  font-weight: 500;
-  pointer-events: none;
-}
-
-.grid-line {
-  stroke: rgba(0, 0, 0, .06);
-  stroke-width: 1;
-}
-
-.ping-bar {
-  fill: #21BA45;
 }
 
 div.progress {
