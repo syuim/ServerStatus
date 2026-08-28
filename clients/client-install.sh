@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # ServerStatus 客户端一键接入（从 GitHub 下载）
 # 用法: bash <(curl -sL https://raw.githubusercontent.com/syuim/ServerStatus/master/clients/client-install.sh)
-# 可用环境变量覆盖: SERVER / PORT / SS_USER / KEY / TAGS / NAME / TRAFFIC_RESET_DAY / TRAFFIC_QUOTA
+# 可用参数: --server <地址> --port <端口> --user <用户名> --key <密钥>
+#           --name <节点名> --tags <标签> --reset-day <每月几号> --quota <配额，如 1T>
+# 也可用环境变量覆盖: SERVER / PORT / SS_USER / KEY / TAGS / NAME / TRAFFIC_RESET_DAY / TRAFFIC_QUOTA
 set -euo pipefail
 
 SERVER="${SERVER:-rn.127315.xyz}"
@@ -13,6 +15,20 @@ NAME="${NAME:-}"
 TAGS="${TAGS:-}"
 TRAFFIC_RESET_DAY="${TRAFFIC_RESET_DAY:-1}"
 TRAFFIC_QUOTA="${TRAFFIC_QUOTA:-0}"
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --server) SERVER="${2:-}"; shift 2 ;;
+    --port) PORT="${2:-}"; shift 2 ;;
+    --user) SS_USER="${2:-}"; shift 2 ;;
+    --key) KEY="${2:-}"; shift 2 ;;
+    --name) NAME="${2:-}"; shift 2 ;;
+    --tags) TAGS="${2:-}"; shift 2 ;;
+    --reset-day) TRAFFIC_RESET_DAY="${2:-}"; shift 2 ;;
+    --quota) TRAFFIC_QUOTA="${2:-}"; shift 2 ;;
+    *) echo "✗ 未知参数: $1"; exit 1 ;;
+  esac
+done
 REPO="syuim/ServerStatus"
 BRANCH="master"
 RAW="https://raw.githubusercontent.com/${REPO}/${BRANCH}"
