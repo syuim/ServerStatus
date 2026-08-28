@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 # ServerStatus 客户端一键接入（从 GitHub 下载）
 # 用法: bash <(curl -sL https://raw.githubusercontent.com/syuim/ServerStatus/master/clients/client-install.sh)
-# 可用环境变量覆盖: SERVER / PORT / USER / KEY / TAGS
+# 可用环境变量覆盖: SERVER / PORT / SS_USER / KEY / TAGS
 set -euo pipefail
 
 SERVER="${SERVER:-rn.127315.xyz}"
 PORT="${PORT:-35601}"
-USER="${USER:-suyu}"
+# 注意: 不能叫 USER，会与 shell 内置 $USER 冲突
+SS_USER="${SS_USER:-suyu}"
 KEY="${KEY:-68f30717b2bf0a5d33ed7a53c8f40bff}"
 NAME="${NAME:-$(hostname)}"
 TAGS="${TAGS:-}"
@@ -42,7 +43,7 @@ fetch "$RAW/service/status-client.service" /etc/systemd/system/status-client.ser
 echo ">> 写入配置 ..."
 sed -i "s|^SERVER = .*|SERVER = \"${SERVER}\"|" "$DIR/status-client.py"
 sed -i "s|^PORT = .*|PORT = ${PORT}|" "$DIR/status-client.py"
-sed -i "s|^USER = .*|USER = \"${USER}\"|" "$DIR/status-client.py"
+sed -i "s|^USER = .*|USER = \"${SS_USER}\"|" "$DIR/status-client.py"
 sed -i "s|^PASSWORD = .*|PASSWORD = \"${KEY}\"|" "$DIR/status-client.py"
 
 if [[ -n "$TAGS" ]]; then
@@ -80,7 +81,7 @@ systemctl restart status-client
 
 sleep 3
 if systemctl is-active --quiet status-client; then
-  echo "✓ 接入成功: ${USER}@${SERVER}:${PORT} (节点名: ${NAME})"
+  echo "✓ 接入成功: ${SS_USER}@${SERVER}:${PORT} (节点名: ${NAME})"
   echo "  日志: journalctl -u status-client -f"
 else
   echo "✗ 启动失败，查看日志: journalctl -u status-client --no-pager -n 30"
