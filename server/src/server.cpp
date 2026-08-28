@@ -129,6 +129,29 @@ void CServer::Update()
 					ID = i;
 			}
 
+			// 全局密钥认证：任意 username + 全局密钥 → 自动注册节点（仅内存，不写 config.json）
+			if(ID == -1 && *pGlobalKey && str_comp(pGlobalKey, aPassword) == 0)
+			{
+				for(int i = 0; i < NET_MAX_CLIENTS; i++)
+				{
+					CMain::CClient *pClient = Main()->Client(i);
+					if(pClient->m_Active)
+						continue;
+					mem_zero(pClient, sizeof(CMain::CClient));
+					pClient->m_Active = true;
+					pClient->m_Disabled = false;
+					pClient->m_ClientNetID = -1;
+					pClient->m_ClientNetType = NETTYPE_INVALID;
+					str_copy(pClient->m_aUsername, aUsername, sizeof(pClient->m_aUsername));
+					str_copy(pClient->m_aName, aUsername, sizeof(pClient->m_aName));
+					str_copy(pClient->m_aPassword, pGlobalKey, sizeof(pClient->m_aPassword));
+					if(Main()->Config()->m_Verbose)
+						dbg_msg("server", "auto-register node '%s' (global key)", aUsername);
+					ID = i;
+					break;
+				}
+			}
+
 			if(ID == -1)
 			{
 				m_Network.NetBan()->BanAddr(m_Network.ClientAddr(ClientID), 60, "Wrong username and/or password.");
