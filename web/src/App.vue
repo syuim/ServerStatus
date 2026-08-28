@@ -176,6 +176,8 @@ html {
 
 body {
   background: url("./assets/img/bg_parts.png") repeat-y left top, url('./assets/img/bg.png') repeat left top;
+  font-family: "LXGW WenKai Screen R", -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+    "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
 }
 
 /*Global*/
