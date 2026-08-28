@@ -12,23 +12,55 @@ import 'chartjs-adapter-date-fns';
 // 与 p4.pw 一致：Chart.js 4.4.0 折线图，Y 轴 0-600ms，超时画到顶部尖峰
 const Y_MAX = 600;
 
-// hover 时在鼠标位置画一条竖线
+// hover 时在鼠标位置画一条竖线，左右移动时平滑过渡
+let targetX: number | null = null;
+let currentX: number | null = null;
+let rafId: number | null = null;
+
+const easeGuide = (chart: Chart) => {
+  if (currentX === null || targetX === null) return;
+  const diff = targetX - currentX;
+  if (Math.abs(diff) < 0.5) {
+    currentX = targetX;
+  } else {
+    currentX += diff * 0.22;
+    rafId = window.requestAnimationFrame(() => {
+      chart.draw();
+      easeGuide(chart);
+    });
+    return;
+  }
+  chart.draw();
+  rafId = null;
+};
+
 const verticalGuide = {
   id: 'verticalGuide',
   afterDatasetsDraw(chart: Chart) {
     const active = chart.tooltip?.getActiveElements?.() || [];
-    if (!active.length) return;
-    const x = active[0].element.x;
+    const x = active.length ? active[0].element.x : null;
+    if (x !== targetX) {
+      targetX = x;
+      if (x !== null && currentX === null) currentX = x;
+    }
+    if (currentX === null || targetX === null) return;
+    const guideX = Math.round(currentX) + 0.5;
     const { top, bottom } = chart.chartArea;
     const ctx = chart.ctx;
     ctx.save();
     ctx.beginPath();
-    ctx.moveTo(x, top);
-    ctx.lineTo(x, bottom);
+    ctx.moveTo(guideX, top);
+    ctx.lineTo(guideX, bottom);
     ctx.lineWidth = 1.5;
     ctx.strokeStyle = 'rgba(0, 0, 0, .25)';
     ctx.stroke();
     ctx.restore();
+    if (rafId === null && currentX !== targetX) {
+      rafId = window.requestAnimationFrame(() => {
+        chart.draw();
+        easeGuide(chart);
+      });
+    }
   }
 };
 
@@ -157,6 +189,10 @@ export default defineComponent({
     );
 
     onBeforeUnmount(() => {
+      if (rafId !== null) {
+        cancelAnimationFrame(rafId);
+        rafId = null;
+      }
       if (chart) {
         chart.destroy();
         chart = null;
