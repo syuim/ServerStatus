@@ -36,6 +36,12 @@ else
   PYTHON=python3
 fi
 
+echo ">> 安装 vnstat（总流量统计，跨重启准确）..."
+if ! command -v vnstat >/dev/null 2>&1; then
+  (apt-get update -qq && apt-get install -y vnstat) || yum install -y vnstat
+fi
+systemctl enable --now vnstat >/dev/null 2>&1 || true
+
 echo ">> 下载客户端 ..."
 mkdir -p "$DIR"
 fetch "$RAW/clients/status-client.py" "$DIR/status-client.py"

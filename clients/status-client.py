@@ -8,6 +8,7 @@ import re
 import os
 import sys
 import json
+import signal
 import calendar
 import subprocess
 import threading
@@ -177,7 +178,8 @@ def check_interface(net_name):
 
 
 class TrafficTracker(object):
-    """流量累计：周期流量每月 TRAFFIC_RESET_DAY 号自动重置，总流量永久累计；状态持久化到本地文件"""
+    """流量统计：周期流量按 TRAFFIC_RESET_DAY 每月重置（差值累计），
+    总流量优先取 vnstat（跨机器重启准确），无 vnstat 时回退差值累计"""
 
     _net_re = re.compile(r'([^\s]+):[\s]*(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)')
 
@@ -188,6 +190,12 @@ class TrafficTracker(object):
         self.last_rx = None
         self.last_tx = None
         self._last_save = 0
+        # vnstat 数据缓存：基值 + 基准网卡计数，60s 刷新一次
+        self._vnstat_rx = None
+        self._vnstat_tx = None
+        self._vnstat_base_rx = 0
+        self._vnstat_base_tx = 0
+        self._vnstat_ts = 0
         self._load()
 
     def _load(self):
@@ -205,6 +213,19 @@ class TrafficTracker(object):
             os.rename(tmp, self.state_file)
         except Exception:
             pass
+
+    def _vnstat_total(self):
+        # 读取 vnstat 至今总流量 (rx, tx) 字节；vnstat 未装/无数据时返回 None
+        try:
+            out = os.popen('vnstat --oneline b').readline()
+            if not out or 'Not enough data available yet' in out:
+                return None
+            v_data = out.split(';')
+            if len(v_data) > 10:
+                return int(v_data[8]), int(v_data[9])
+        except Exception:
+            pass
+        return None
 
     def _read_counters(self):
         rx = 0
@@ -238,11 +259,21 @@ class TrafficTracker(object):
     def update(self):
         rx, tx = self._read_counters()
         now = datetime.now()
-        if self.last_rx is not None and rx >= self.last_rx and tx >= self.last_tx:
-            drx, dtx = rx - self.last_rx, tx - self.last_tx
+        if self.last_rx is not None:
+            if rx >= self.last_rx and tx >= self.last_tx:
+                drx, dtx = rx - self.last_rx, tx - self.last_tx
+            else:
+                # 进程运行中网卡计数重置（换网卡等）：从新基线继续
+                drx, dtx = 0, 0
         else:
-            # 首次运行或网卡计数重置（重启/换网卡）：只重建基线，不计流量
-            drx, dtx = 0, 0
+            saved_rx = self.state.get('last_rx')
+            saved_tx = self.state.get('last_tx')
+            if saved_rx is not None and rx >= saved_rx and tx >= saved_tx:
+                # 进程重启但网卡计数连续（机器未重启）：补计离线期间的流量
+                drx, dtx = rx - saved_rx, tx - saved_tx
+            else:
+                # 首次部署或机器重启（网卡计数归零）：只建基线，不计历史流量
+                drx, dtx = 0, 0
         self.last_rx, self.last_tx = rx, tx
         pstart = self._period_start(now)
         if pstart != self.state.get('period_start'):
@@ -253,7 +284,28 @@ class TrafficTracker(object):
         self.state['total_tx'] += dtx
         self.state['period_rx'] += drx
         self.state['period_tx'] += dtx
-        if time.time() - self._last_save >= 10:
+        # 总流量优先用 vnstat：基值 60s 刷新一次，间隙用网卡差值平滑补足；
+        # 网卡计数回退（机器重启）时立即刷新
+        if time.time() - self._vnstat_ts >= 60 or (
+                self._vnstat_rx is not None and (rx < self._vnstat_base_rx or tx < self._vnstat_base_tx)):
+            vn = self._vnstat_total()
+            if vn is not None:
+                self._vnstat_ts = time.time()
+                self._vnstat_rx, self._vnstat_tx = vn
+                self._vnstat_base_rx, self._vnstat_base_tx = rx, tx
+        if self._vnstat_rx is not None:
+            if rx < self._vnstat_base_rx or tx < self._vnstat_base_tx:
+                # 机器重启且 vnstat 刷新失败（如无数据）：按当前计数重建基准
+                self._vnstat_base_rx, self._vnstat_base_tx = rx, tx
+                self.state['total_rx'] = self._vnstat_rx
+                self.state['total_tx'] = self._vnstat_tx
+            else:
+                self.state['total_rx'] = self._vnstat_rx + (rx - self._vnstat_base_rx)
+                self.state['total_tx'] = self._vnstat_tx + (tx - self._vnstat_base_tx)
+        # 记录最近一次网卡计数，进程重启后可据此补计间隙流量
+        self.state['last_rx'] = rx
+        self.state['last_tx'] = tx
+        if time.time() - self._last_save >= 3:
             self._save()
             self._last_save = time.time()
         return self.state
@@ -388,6 +440,17 @@ def get_network(ip_version):
 
 if __name__ == '__main__':
     socket.setdefaulttimeout(30)
+
+    def save_on_exit(signum, frame):
+        # systemctl stop / 手动重启时把最新计数落盘，重启后可补计间隙流量
+        try:
+            traffic_tracker._save()
+        except Exception:
+            pass
+        sys.exit(0)
+
+    signal.signal(signal.SIGTERM, save_on_exit)
+    signal.signal(signal.SIGINT, save_on_exit)
     while True:
         try:
             print('Connecting...')
