@@ -58,9 +58,7 @@ WEB_TMP="/tmp/serverstatus-web"
 rm -rf "$WEB_TMP"
 mkdir -p "$WEB_TMP"
 TARBALL="https://codeload.github.com/${REPO}/tar.gz/refs/heads/${BRANCH}"
-if ! curl -sSL --fail --connect-timeout 10 -o "$WEB_TMP/repo.tar.gz" "$TARBALL"; then
-  wget -q --no-check-certificate --timeout=15 -O "$WEB_TMP/repo.tar.gz" "$TARBALL"
-fi
+curl -sSL --fail --connect-timeout 10 -o "$WEB_TMP/repo.tar.gz" "$TARBALL"
 tar -xzf "$WEB_TMP/repo.tar.gz" -C "$WEB_TMP"
 WEB_SRC="$WEB_TMP/ServerStatus-${BRANCH}/web/dist"
 if [[ -d "$WEB_SRC" ]]; then
@@ -81,9 +79,7 @@ else
 fi
 
 echo ">> 安装 systemd 服务 ..."
-if ! curl -sSL --fail --connect-timeout 8 -o /etc/systemd/system/sergate.service "$RAW/service/sergate.service"; then
-  wget -q --no-check-certificate --timeout=8 -O /etc/systemd/system/sergate.service "$RAW/service/sergate.service"
-fi
+curl -sSL --fail --connect-timeout 8 -o /etc/systemd/system/sergate.service "$RAW/service/sergate.service"
 # 按实际安装路径修正 service 文件（支持 CONFIG_DIR / WEB_DIR 覆盖）
 sed -i "s|/usr/local/ServerStatus/server/sergate|$DIR/sergate|g; s|/usr/local/ServerStatus/server/config.json|$DIR/config.json|g; s|/usr/local/ServerStatus/web|$WEB_DIR|g; s|WorkingDirectory=/usr/local/ServerStatus/server|WorkingDirectory=$DIR|" /etc/systemd/system/sergate.service
 systemctl daemon-reload

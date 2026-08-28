@@ -32,14 +32,11 @@ done
 REPO="syuim/ServerStatus"
 BRANCH="master"
 RAW="https://raw.githubusercontent.com/${REPO}/${BRANCH}"
-MIRROR="https://cdn.jsdelivr.net/gh/${REPO}@${BRANCH}"
 DIR="/usr/local/ServerStatus/client"
 SERVER_CONFIG="/usr/local/ServerStatus/server/config.json"
 
 fetch() { # fetch <url> <输出文件>
-  if curl -sSL --fail --connect-timeout 8 -o "$2" "$1"; then return 0; fi
-  curl -sSL --fail --connect-timeout 8 -o "$2" "${1/$RAW/$MIRROR}" 2>/dev/null && return 0
-  wget -q --no-check-certificate --timeout=8 -O "$2" "${1/$RAW/$MIRROR}"
+  curl -sSL --fail --connect-timeout 8 -o "$2" "$1"
 }
 
 [[ $EUID -ne 0 ]] && echo "请用 root 运行" && exit 1

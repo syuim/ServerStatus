@@ -15,9 +15,7 @@ TARBALL="https://codeload.github.com/${REPO}/tar.gz/refs/heads/${BRANCH}"
 echo ">> 下载仓库产物 ..."
 rm -rf "$TMP"
 mkdir -p "$TMP"
-if ! curl -sSL --fail --connect-timeout 10 -o "$TMP/repo.tar.gz" "$TARBALL"; then
-  wget -q --no-check-certificate --timeout=15 -O "$TMP/repo.tar.gz" "$TARBALL"
-fi
+curl -sSL --fail --connect-timeout 10 -o "$TMP/repo.tar.gz" "$TARBALL"
 
 tar -xzf "$TMP/repo.tar.gz" -C "$TMP"
 SRC="$TMP/ServerStatus-${BRANCH}/web/dist"
