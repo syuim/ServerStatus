@@ -2,7 +2,7 @@
   <tr class="tableRow" @click="collapsed = !collapsed">
     <td>
       <div class="ui progress" :class="{'success': getStatus, 'error': !getStatus}">
-        <div class="bar" style="width: 100%"><span> {{ getStatus ? '运行中' : '维护中' }} </span>
+        <div class="bar bar--solid" style="width: 100%"><span> {{ getStatus ? '运行中' : '维护中' }} </span>
         </div>
       </div>
     </td>
@@ -15,9 +15,16 @@
         getStatus ? `${tableRowByteConvert(server.network_rx)} | ${tableRowByteConvert(server.network_tx)}` : '–'
       }}
     </td>
-    <td>{{
-        getStatus ? `${tableRowByteConvert(server.network_in)} | ${tableRowByteConvert(server.network_out)}` : '–'
-      }}
+    <td>
+      <template v-if="getStatus && trafficQuota">
+        <div class="ui progress" :class="trafficQuotaState">
+          <div class="bar" :style="{'width': trafficQuotaPct + '%'}">{{ trafficQuotaPct }}%</div>
+        </div>
+      </template>
+      <template v-else>{{
+          getStatus ? `${tableRowByteConvert(server.network_in)} | ${tableRowByteConvert(server.network_out)}` : '–'
+        }}
+      </template>
     </td>
     <td>
       <div class="ui progress" :class="getProcessBarStatus(getCpuStatus)">
@@ -57,15 +64,7 @@
             getStatus ? `${expandRowByteConvert(server.hdd_used * 1024 * 1024)} / ${expandRowByteConvert(server.hdd_total * 1024 * 1024)}` : '–'
           }}
         </div>
-        <div id="expand_traffic_period" class="traffic-row">
-          流量:
-          <template v-if="getStatus && trafficQuota">
-            <div class="traffic-bar" :class="trafficQuotaState">
-              <div class="traffic-bar__fill" :style="{'width': trafficQuotaPct + '%'}">{{ trafficQuotaPct }}% {{ trafficQuotaText }}</div>
-            </div>
-          </template>
-          <template v-else>{{ getStatus ? trafficPeriodText : '–' }}</template>
-        </div>
+        <div id="expand_traffic_period">流量: {{ getStatus ? (trafficQuota ? trafficQuotaTextPct : trafficPeriodText) : '–' }}</div>
         <div class="tag-line" v-if="tags.length">
           <span v-for="t in tags" :key="t.text" class="tag" :class="t.color ? `tag--${t.color}` : ''">{{ t.text }}</span>
         </div>
@@ -178,12 +177,16 @@ export default defineComponent({
     });
     const trafficQuotaState = computed(() => {
       const p = trafficQuotaPct.value;
-      return p > 90 ? 'traffic-bar--error' : p > 70 ? 'traffic-bar--warning' : 'traffic-bar--success';
+      return p > 90 ? 'error' : p > 70 ? 'warning' : 'success';
     });
     const trafficQuotaText = computed(() => {
       if (!trafficQuota.value) return '';
       const fmt = utils.expandRowByteConvert.value;
       return `${fmt(trafficSum.value)} / ${fmt(trafficQuota.value)}`;
+    });
+    const trafficQuotaTextPct = computed(() => {
+      if (!trafficQuota.value) return '';
+      return `${trafficQuotaPct.value}% · ${trafficQuotaText.value}`;
     });
     const trafficPeriodText = computed(() => {
       const t = traffic.value;
@@ -263,7 +266,7 @@ export default defineComponent({
       trafficQuota,
       trafficQuotaPct,
       trafficQuotaState,
-      trafficQuotaText,
+      trafficQuotaTextPct,
       pingSeries,
       activePing,
       currentSeries,
@@ -344,48 +347,6 @@ tr.expandRow td {
 .tag--yellow {
   background-color: #fbbd08;
   color: #fff;
-}
-
-.traffic-row {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: .6em;
-}
-
-.traffic-bar {
-  display: inline-block;
-  flex: 1;
-  max-width: 360px;
-  min-width: 140px;
-  height: 20px;
-  border-radius: 6px;
-  background: rgba(0, 0, 0, .1);
-  overflow: hidden;
-}
-
-.traffic-bar__fill {
-  height: 20px;
-  line-height: 20px;
-  border-radius: 6px;
-  font-size: .75rem;
-  /* 深色文字：进度不满时溢出到白色背景部分依然可读 */
-  color: rgba(0, 0, 0, .62);
-  text-align: center;
-  white-space: nowrap;
-  transition: width .3s ease, background-color .3s ease;
-}
-
-.traffic-bar--success .traffic-bar__fill {
-  background: var(--hotaru-status-ok);
-}
-
-.traffic-bar--warning .traffic-bar__fill {
-  background: var(--hotaru-status-warn);
-}
-
-.traffic-bar--error .traffic-bar__fill {
-  background: var(--hotaru-status-bad);
 }
 
 .ping-panel {
@@ -479,10 +440,15 @@ div.progress div.bar {
   border-radius: 6px;
   font-size: .85rem;
   line-height: 22px;
-  color: white;
+  /* 深色文字：进度不满时溢出到白色背景部分依然可读 */
+  color: rgba(0, 0, 0, .62);
   text-align: center;
   white-space: nowrap;
   transition: width .1s ease, background-color .1s ease;
+}
+
+div.progress div.bar.bar--solid {
+  color: #fff;
 }
 
 div.progress.success div.bar {
