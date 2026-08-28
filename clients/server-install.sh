@@ -111,6 +111,12 @@ $CADDY_SITE
 }
 EOF
 systemctl enable caddy >/dev/null 2>&1
+# web 目录在 /root 下时（如 /root/docker/tz/web），caddy 默认用户无法访问，改用 root 运行
+if [[ "$WEB_DIR" == /root/* ]]; then
+  mkdir -p /etc/systemd/system/caddy.service.d
+  printf '[Service]\nUser=root\nGroup=root\n' > /etc/systemd/system/caddy.service.d/user.conf
+  systemctl daemon-reload
+fi
 systemctl restart caddy
 echo "   前台: ${SERVER_HOST:-http://<本机IP>}:${WEB_PORT} -> ${WEB_DIR}"
 
