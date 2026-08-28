@@ -44,7 +44,7 @@
   <tr class="expandRow">
     <td colspan="11">
       <div class="expand-inner" :class="{collapsed}" :style="{'max-height': getStatus ? '' : '0'}">
-        <div id="expand_cpu">CPU 型号: {{ getStatus ? cpuModel : '–' }}</div>
+        <div id="expand_cpu">CPU: {{ getStatus ? cpuModel : '–' }}</div>
         <div id="expand_mem">内存信息: {{
             getStatus ? `${expandRowByteConvert(server.memory_used * 1024)} / ${expandRowByteConvert(server.memory_total * 1024)}` : '–'
           }}
@@ -75,12 +75,18 @@
               <span class="ping-stat ping-stat--loss">{{ activeLossText }}</span>
             </div>
           </div>
-          <svg class="ping-chart" :viewBox="`0 0 ${CHART_W} ${CHART_H}`" preserveAspectRatio="none">
-            <g v-for="gy in gridYs" :key="gy">
-              <line :x1="0" :y1="gy" :x2="CHART_W" :y2="gy" class="grid-line"/>
-            </g>
-            <rect v-for="b in activeBars" :key="b.i" :x="b.x" :y="b.y" :width="b.w" :height="b.h" class="ping-bar"/>
-          </svg>
+          <div class="ping-chart-wrap">
+            <svg class="ping-chart" :viewBox="`0 0 ${CHART_W} ${CHART_H}`" preserveAspectRatio="none">
+              <g v-for="gy in gridYs" :key="gy">
+                <line :x1="0" :y1="gy" :x2="CHART_W" :y2="gy" class="grid-line"/>
+              </g>
+              <rect v-for="b in activeBars" :key="b.i" :x="b.x" :y="b.y" :width="b.w" :height="b.h" class="ping-bar"/>
+            </svg>
+            <div class="ping-axis" v-if="axisStart && axisEnd">
+              <span>{{ axisStart }}</span>
+              <span>{{ axisEnd }}</span>
+            </div>
+          </div>
         </div>
       </div>
     </td>
@@ -131,8 +137,7 @@ export default defineComponent({
     const cpuModel = computed(() => {
       const d = customData.value;
       if (!d || !d.cpu_model) return '–';
-      const cores = d.cores ? ` ${d.cores} Virtual Core${d.cores > 1 ? 's' : ''}` : '';
-      return `${d.cpu_model}${cores}`;
+      return d.cpu_model.replace(/\s*\d+\s*[-–]?\s*Core\s*Processor$/i, '').trim();
     });
     const osName = computed(() => {
       const d = customData.value;
@@ -145,9 +150,13 @@ export default defineComponent({
     const pingSeries = computed(() => {
       const d = customData.value;
       if (!d || !d.ping) return [];
-      return Object.keys(d.ping)
-        .filter(name => Array.isArray(d.ping![name]) && d.ping![name].length)
-        .map(name => ({name, values: d.ping![name]}));
+      const raw = d.ping as Record<string, unknown>;
+      const t = typeof raw.t === 'number' && raw.t > 0 ? raw.t : 0;
+      const iv = typeof raw.iv === 'number' && raw.iv > 0 ? raw.iv : 60;
+      return Object.keys(raw)
+        .filter(k => k !== 't' && k !== 'iv')
+        .filter(k => Array.isArray(raw[k]) && (raw[k] as number[]).length)
+        .map(name => ({name, values: raw[name] as number[], startTs: t, iv}));
     });
     const activePing = ref('');
     const currentSeries = computed(() => {
@@ -172,6 +181,21 @@ export default defineComponent({
     });
     const activeAvgText = computed(() => activeAvg.value === '–' ? '–' : `${activeAvg.value}ms`);
     const activeLossText = computed(() => activeLoss.value === '–' ? '–' : `${activeLoss.value}%`);
+    const fmtTime = (ts: number) => {
+      const d = new Date(ts * 1000);
+      const p = (n: number) => String(n).padStart(2, '0');
+      return `${p(d.getHours())}:${p(d.getMinutes())}`;
+    };
+    const axisStart = computed(() => {
+      const s = currentSeries.value;
+      if (!s || !s.startTs || s.values.length < 2) return '';
+      return fmtTime(s.startTs - (s.values.length - 1) * s.iv);
+    });
+    const axisEnd = computed(() => {
+      const s = currentSeries.value;
+      if (!s || !s.startTs || s.values.length < 2) return '';
+      return fmtTime(s.startTs);
+    });
     const yScale = computed(() => {
       const vals = validValues.value;
       const max = vals.length ? Math.max(...vals) : 0;
@@ -190,11 +214,11 @@ export default defineComponent({
       const bars: Array<{ i: number; x: number; y: number; w: number; h: number }> = [];
       s.values.forEach((v, i) => {
         if (v < 0) return;
-        const h = Math.min(v / yScale.value, 1) * (CHART_H - 8);
+        const h = Math.min(v / yScale.value, 1) * (CHART_H - 20);
         bars.push({
           i,
           x: i * slot + (slot - barW) / 2,
-          y: CHART_H - h - 4,
+          y: CHART_H - 16 - h,
           w: barW,
           h
         });
@@ -210,6 +234,8 @@ export default defineComponent({
       activePing,
       activeAvgText,
       activeLossText,
+      axisStart,
+      axisEnd,
       activeBars,
       gridYs,
       CHART_W,
@@ -337,10 +363,27 @@ tr.expandRow td {
   padding: 5.5px 9px;
 }
 
+.ping-chart-wrap {
+  position: relative;
+}
+
 .ping-chart {
   display: block;
   width: 100%;
   height: 200px;
+}
+
+.ping-axis {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 2px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: #9da2a6;
+  font-weight: 500;
+  pointer-events: none;
 }
 
 .grid-line {

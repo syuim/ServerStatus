@@ -31,7 +31,7 @@ PING_TARGETS = [
 ]
 PING_INTERVAL = 60   # 每轮 TCPing 间隔（秒）
 PING_TIMEOUT = 3
-PING_HISTORY = 20    # 保留的历史点数；custom 字段上限 512 字节，不宜增大
+PING_HISTORY = 15    # 保留的历史点数；custom 字段上限 512 字节，含时间戳后不宜增大
 
 
 def get_os():
@@ -39,7 +39,9 @@ def get_os():
         with open('/etc/os-release', 'r') as f:
             for line in f:
                 if line.startswith('PRETTY_NAME='):
-                    return line.split('=', 1)[1].strip().strip('"')
+                    name = line.split('=', 1)[1].strip().strip('"')
+                    # 只保留发行版名第一个词："Debian GNU/Linux 12 (bookworm)" -> "Debian"
+                    return name.split()[0] if name else ''
     except IOError:
         pass
     return ''
@@ -60,6 +62,18 @@ def get_custom():
     data = {'os': get_os(), 'cpu_model': cpu_model, 'cores': cores, 'tags': TAGS}
     if PING_TARGETS:
         data['ping'] = ping_collector.summary()
+        # custom 字段服务端上限 512 字节，超限时缩减各线历史点数
+        encoded = json.dumps(data)
+        for keep in (12, 10, 8, 6):
+            if len(encoded) <= 500:
+                break
+            ping = data['ping']
+            for k in list(ping.keys()):
+                if k in ('t', 'iv'):
+                    continue
+                ping[k] = ping[k][-keep:]
+            encoded = json.dumps(data)
+        return encoded
     return json.dumps(data)
 
 
@@ -68,6 +82,7 @@ class PingCollector(object):
 
     def __init__(self):
         self.results = dict((name, deque(maxlen=PING_HISTORY)) for name, _, _ in PING_TARGETS)
+        self.last_ts = 0
         self.lock = threading.Lock()
         self._stop = threading.Event()
         self.use_icmp = self._icmp_available()
@@ -112,6 +127,7 @@ class PingCollector(object):
 
     def _run(self):
         while not self._stop.is_set():
+            ts = int(time.time())
             for name, host, port in PING_TARGETS:
                 if self.use_icmp:
                     ms = self._icmp_ping(host)
@@ -119,11 +135,15 @@ class PingCollector(object):
                     ms = self._tcping(host, port)
                 with self.lock:
                     self.results[name].append(ms)
+                    self.last_ts = ts
             self._stop.wait(PING_INTERVAL)
 
     def summary(self):
         with self.lock:
-            return dict((name, list(values)) for name, values in self.results.items())
+            data = dict((name, list(values)) for name, values in self.results.items())
+            data['t'] = self.last_ts or int(time.time())
+            data['iv'] = PING_INTERVAL
+            return data
 
 
 ping_collector = PingCollector()
