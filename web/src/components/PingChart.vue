@@ -25,8 +25,8 @@ const verticalGuide = {
     ctx.beginPath();
     ctx.moveTo(x, top);
     ctx.lineTo(x, bottom);
-    ctx.lineWidth = 1;
-    ctx.strokeStyle = 'rgba(0, 0, 0, .15)';
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = 'rgba(0, 0, 0, .25)';
     ctx.stroke();
     ctx.restore();
   }
