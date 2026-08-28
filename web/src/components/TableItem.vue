@@ -68,7 +68,7 @@
 </template>
 
 <script lang="ts">
-import { defineComponent, ref, computed, PropType } from 'vue';
+import { defineComponent, ref, computed, watch, PropType } from 'vue';
 import useStatus from './useStatus';
 import PingChart from './PingChart.vue';
 import { StatusItem } from '@/types';
@@ -132,6 +132,15 @@ export default defineComponent({
         .map(name => ({name, values: raw[name] as number[], startTs: t, iv}));
     });
     const activePing = ref('');
+    watch(
+      () => pingSeries.value.map(s => s.name).join(','),
+      (names) => {
+        if (!names) return;
+        const list = names.split(',');
+        if (!list.includes(activePing.value)) activePing.value = list[0];
+      },
+      { immediate: true }
+    );
     const historySeries = computed(() => {
       const h = props.history;
       if (!h || !props.server.name) return [];
@@ -256,52 +265,79 @@ tr.expandRow td {
 }
 
 .ping-panel {
-  margin-top: .5em;
+  margin: .8em 0 .2em;
+  padding: .9em 1.1em 1em;
+  text-align: left;
+  background: #f5f5f5;
+  border-radius: var(--hotaru-radius);
+  border: none;
+  font-weight: 500;
+  color: var(--hotaru-text);
 }
 
 .ping-head {
   display: flex;
   align-items: center;
-  gap: 6px;
-  margin-bottom: 10px;
+  flex-wrap: wrap;
+  gap: .4em;
+  margin-bottom: .7em;
 }
 
 .ping-tabs {
-  display: flex;
-  gap: 5px;
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: .35em;
+  align-items: center;
 }
 
 .ping-tab {
   border: none;
   border-radius: 6px;
-  background: #e8e8e8;
-  color: #616366;
+  background: transparent;
+  color: var(--hotaru-text);
+  font-size: .82rem;
   font-weight: 700;
-  font-size: .8rem;
-  line-height: 1;
-  padding: 4px 10px;
+  line-height: 1.2;
+  padding: .35em .85em;
   cursor: pointer;
+  transition: background .15s ease, color .15s ease;
 }
 
-.ping-tab.active {
-  background: #21BA45;
+.ping-tab:hover {
+  background: rgba(33, 186, 69, .08);
+  color: var(--hotaru-text);
+}
+
+.ping-tab.active,
+.ping-tab.active:hover {
+  background: var(--hotaru-status-ok);
   color: #fff;
 }
 
 .ping-stats {
-  display: flex;
-  gap: 6px;
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: .4em;
+  align-items: center;
   margin-left: auto;
 }
 
 .ping-stat {
-  background: rgba(0, 0, 0, .05);
-  border-radius: 4px;
-  color: #616366;
-  font-size: .78rem;
-  font-weight: 700;
+  display: inline-flex;
+  align-items: baseline;
+  min-width: 3.6em;
+  justify-content: center;
+  background-color: rgba(0, 0, 0, .05);
+  color: var(--hotaru-text);
+  font-size: .78571429rem;
   line-height: 1;
-  padding: 5.5px 9px;
+  font-weight: 700;
+  padding: .5em .833em;
+  border: 0;
+  border-radius: .28571429rem;
+  box-shadow: inset 0 1px rgba(255, 255, 255, .55);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 div.progress {
@@ -321,6 +357,18 @@ div.progress div.bar {
   line-height: 22px;
   color: white;
   transition: width .1s ease, background-color .1s ease;
+}
+
+div.progress.success div.bar {
+  background: var(--hotaru-status-ok);
+}
+
+div.progress.warning div.bar {
+  background: var(--hotaru-status-warn);
+}
+
+div.progress.error div.bar {
+  background: var(--hotaru-status-bad);
 }
 
 tr td {

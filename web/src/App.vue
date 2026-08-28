@@ -1,7 +1,7 @@
 <template>
-  <the-error v-show="!servers"/>
+  <the-error v-show="error"/>
   <div class="container">
-    <servers-table :servers="servers" :history="history"/>
+    <servers-table :servers="servers || []" :history="history" :loading="loading"/>
     <update-time :updated="updated"/>
   </div>
 </template>
@@ -32,15 +32,27 @@ export default defineComponent({
     const servers = ref<Array<StatusItem | BoxItem>>();
     const history = ref<Record<string, PingHistoryEntry>>({});
     const updated = ref<number>();
+    const loading = ref(true);
+    const error = ref(false);
     const { interval } = window.__PRE_CONFIG__;
     let timer: number;
     let historyTimer: number;
+    const hideInitialLoader = () => {
+      const el = document.getElementById('initial-loader');
+      if (el) el.classList.add('is-done');
+      loading.value = false;
+    };
     const runFetch = () => axios.get('json/stats.json')
       .then(res => {
         servers.value = res.data.servers;
         updated.value = Number(res.data.updated);
+        hideInitialLoader();
       })
-      .catch(err => console.log(err));
+      .catch(err => {
+        error.value = true;
+        hideInitialLoader();
+        console.log(err);
+      });
     const runHistoryFetch = () => axios.get('json/history.json')
       .then(res => {
         history.value = res.data.ping || {};
@@ -59,11 +71,96 @@ export default defineComponent({
     return {
       servers,
       history,
-      updated
+      updated,
+      loading,
+      error
     };
   }
 });
 </script>
+
+<style>
+:root {
+  --hotaru-text: #616366;
+  --hotaru-muted: #919699;
+  --hotaru-faint: #9da2a6;
+  --hotaru-line: rgba(0, 0, 0, .06);
+  --hotaru-card-bg: rgba(255, 255, 255, .8);
+  --hotaru-row-bg: rgba(249, 249, 249, .8);
+  --hotaru-shadow: 5px 5px 25px 0 rgba(46, 61, 73, .2);
+  --hotaru-shadow-sm: 0 2px 6px rgba(46, 61, 73, .08);
+  --hotaru-radius: 8px;
+  --hotaru-radius-lg: 12px;
+  --hotaru-radius-xl: 18px;
+  --hotaru-status-ok: #21BA45;
+  --hotaru-status-warn: #F2C037;
+  --hotaru-status-bad: #DB2828;
+  --hotaru-status-off: #9b9fa3;
+}
+
+.hotaru-initial-loader {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #fff;
+  color: #616366;
+  font-size: 1rem;
+  letter-spacing: .02em;
+  transition: opacity .32s cubic-bezier(.2, .8, .2, 1);
+}
+
+.hotaru-initial-loader.is-done {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.hotaru-initial-loader__text {
+  font-weight: 400;
+  display: inline-block;
+}
+
+.hotaru-initial-loader__ellipsis {
+  display: inline-block;
+  width: 1em;
+  text-align: left;
+  letter-spacing: .05em;
+}
+
+.hotaru-initial-loader__ellipsis > span {
+  opacity: 0;
+  animation: 1.4s steps(1, end) infinite;
+}
+
+.hotaru-initial-loader__ellipsis > span:nth-child(1) {
+  animation-name: hotaru-ellipsis-1;
+}
+
+.hotaru-initial-loader__ellipsis > span:nth-child(2) {
+  animation-name: hotaru-ellipsis-2;
+}
+
+.hotaru-initial-loader__ellipsis > span:nth-child(3) {
+  animation-name: hotaru-ellipsis-3;
+}
+
+@keyframes hotaru-ellipsis-1 {
+  0% { opacity: 0; }
+  33% { opacity: 1; }
+}
+
+@keyframes hotaru-ellipsis-2 {
+  0%, 33% { opacity: 0; }
+  66% { opacity: 1; }
+}
+
+@keyframes hotaru-ellipsis-3 {
+  0%, 66% { opacity: 0; }
+  100% { opacity: 1; }
+}
+</style>
 
 <style>
 html {

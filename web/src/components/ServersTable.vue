@@ -16,11 +16,9 @@
     </tr>
     </thead>
     <tbody id="servers">
-    <!-- Servers here \o/ -->
-    <!--
-    use index for the key may cause performance issues when delete a server from array,
-    but not a big matter and we cannot find a more suitable data for the unique key.
-    -->
+    <tr v-if="loading" class="hotaru-skeleton">
+      <td class="hotaru-skeleton-td hotaru-skeleton-td--merged" colspan="11">加载中…</td>
+    </tr>
     <table-item v-for="(server, index) of servers" :key="index" :server="server" :history="history"/>
     </tbody>
   </table>
@@ -40,6 +38,10 @@ export default defineComponent({
     history: {
       type: Object as PropType<Record<string, {t: number; iv: number; v: number[]}>>,
       default: () => ({})
+    },
+    loading: {
+      type: Boolean,
+      default: false
     }
   },
   components: {
@@ -56,7 +58,19 @@ export default defineComponent({
 }
 
 #table thead tr th {
-  color: #9da2a6;
+  color: var(--hotaru-faint);
   white-space: nowrap;
+  border-bottom: 1px solid rgba(34, 36, 38, .1);
+}
+
+tr.hotaru-skeleton td.hotaru-skeleton-td {
+  color: var(--hotaru-text);
+  font-weight: 400;
+  background: transparent;
+  border: none;
+  white-space: normal;
+  word-break: break-word;
+  padding: 1.6em .78571429em;
+  text-align: center;
 }
 </style>

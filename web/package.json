@@ -13,8 +13,10 @@
   },
   "dependencies": {
     "axios": "^0.21.1",
+    "chart.js": "^4.4.0",
+    "chartjs-adapter-date-fns": "^3.0.0",
     "core-js": "^3.8.3",
-    "echarts": "^6.1.0",
+    "date-fns": "^3.6.0",
     "semantic-ui-css": "^2.4.1",
     "vue": "^3.2.37"
   },

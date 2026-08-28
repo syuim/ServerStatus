@@ -111,44 +111,17 @@ def get_custom():
 
 
 class PingCollector(object):
-    """后台线程定期 ping 各目标（ICMP 优先，无 ping 命令时回退 TCPing），保留最近 N 轮延迟（毫秒，-1 表示失败）"""
+    """后台线程定期 TCPing 各目标（TCP 连接耗时毫秒，-1 表示失败），保留最近 N 轮延迟"""
 
     def __init__(self):
         self.results = dict((name, deque(maxlen=PING_HISTORY)) for name, _, _ in PING_TARGETS)
         self.last_ts = 0
         self.lock = threading.Lock()
         self._stop = threading.Event()
-        self.use_icmp = self._icmp_available()
         if PING_TARGETS:
             t = threading.Thread(target=self._run)
             t.daemon = True
             t.start()
-
-    @staticmethod
-    def _icmp_available():
-        try:
-            subprocess.check_output(['ping', '-c', '1', '-W', '1', '127.0.0.1'], stderr=subprocess.STDOUT)
-        except OSError:
-            return False
-        except Exception:
-            pass
-        return True
-
-    @staticmethod
-    def _icmp_ping(host):
-        # Linux ping -W 单位为秒，macOS 为毫秒
-        if sys.platform == 'darwin':
-            cmd = ['ping', '-c', '1', '-W', str(PING_TIMEOUT * 1000), host]
-        else:
-            cmd = ['ping', '-c', '1', '-W', str(PING_TIMEOUT), host]
-        try:
-            out = subprocess.check_output(cmd, stderr=subprocess.STDOUT)
-            m = re.search(r'time[=<]\s*([\d.]+)\s*ms', out.decode('utf-8', 'ignore'))
-            if m:
-                return int(round(float(m.group(1))))
-            return -1
-        except Exception:
-            return -1
 
     def _tcping(self, host, port):
         start = time.time()
@@ -162,10 +135,7 @@ class PingCollector(object):
         while not self._stop.is_set():
             ts = int(time.time())
             for name, host, port in PING_TARGETS:
-                if self.use_icmp:
-                    ms = self._icmp_ping(host)
-                else:
-                    ms = self._tcping(host, port)
+                ms = self._tcping(host, port)
                 with self.lock:
                     self.results[name].append(ms)
                     self.last_ts = ts

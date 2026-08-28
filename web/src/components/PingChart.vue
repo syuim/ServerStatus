@@ -1,20 +1,16 @@
 <template>
-  <div ref="el" class="ping-chart"></div>
+  <div class="ping-chart" :class="{'is-ready': ready}">
+    <canvas ref="el"></canvas>
+    <div class="ping-chart__loading" :hidden="ready"><span></span><span></span><span></span></div>
+  </div>
 </template>
 <script lang="ts">
 import { defineComponent, PropType, ref, watch, onMounted, onBeforeUnmount } from 'vue';
-import * as echarts from 'echarts/core';
-import { BarChart } from 'echarts/charts';
-import { GridComponent, TooltipComponent } from 'echarts/components';
-import { CanvasRenderer } from 'echarts/renderers';
+import Chart from 'chart.js/auto';
+import 'chartjs-adapter-date-fns';
 
-echarts.use([BarChart, GridComponent, TooltipComponent, CanvasRenderer]);
-
-const fmtTime = (ts: number) => {
-  const d = new Date(ts * 1000);
-  const p = (n: number) => String(n).padStart(2, '0');
-  return `${p(d.getHours())}:${p(d.getMinutes())}`;
-};
+// 与 p4.pw 一致：Chart.js 4.4.0 折线图，Y 轴 0-600ms，超时画到顶部尖峰
+const Y_MAX = 600;
 
 export default defineComponent({
   name: 'PingChart',
@@ -33,81 +29,159 @@ export default defineComponent({
     }
   },
   setup(props) {
-    const el = ref<HTMLDivElement>();
-    let chart: ReturnType<typeof echarts.init> | null = null;
+    const el = ref<HTMLCanvasElement>();
+    const ready = ref(false);
+    let chart: Chart | null = null;
 
-    const buildOption = () => {
+    const buildData = () => {
       const n = props.values.length;
-      const labels = props.values.map((_, i) => fmtTime(props.startTs - (n - 1 - i) * props.iv));
-      const data = props.values.map(v => v < 0 ? null : v);
-      return {
-        grid: { left: 4, right: 4, top: 8, bottom: 2, containLabel: true },
-        xAxis: {
-          type: 'category' as const,
-          data: labels,
-          axisLine: { show: false },
-          axisTick: { show: false },
-          axisLabel: {
-            color: '#9da2a6',
-            fontSize: 11,
-            interval: n > 8 ? Math.floor(n / 4) : 0
-          }
-        },
-        yAxis: {
-          type: 'value' as const,
-          max: (value: { max: number }) => Math.max(50, Math.ceil(value.max / 100) * 100),
-          splitLine: { lineStyle: { color: 'rgba(0,0,0,.06)' } },
-          axisLabel: { show: false },
-          axisLine: { show: false },
-          axisTick: { show: false }
-        },
-        tooltip: {
-          trigger: 'axis' as const,
-          backgroundColor: 'rgba(255,255,255,.95)',
-          borderColor: 'rgba(0,0,0,.08)',
-          textStyle: { color: '#616366', fontSize: 12 },
-          formatter: (params: Array<{ axisValueLabel: string; value: number | null }>) => {
-            const p = params[0];
-            return `${p.axisValueLabel} ${p.value === null ? '超时' : p.value + 'ms'}`;
-          }
-        },
-        series: [{
-          type: 'bar' as const,
-          data,
-          barMaxWidth: 8,
-          barMinWidth: 2,
-          itemStyle: { color: '#21BA45', borderRadius: [2, 2, 0, 0] }
-        }]
-      };
+      return props.values.map((v, i) => ({
+        x: (props.startTs - (n - 1 - i) * props.iv) * 1000,
+        y: v < 0 ? Y_MAX : Math.min(v, Y_MAX)
+      }));
     };
+
+    const buildConfig = (): any => ({
+      type: 'line',
+      data: {
+        datasets: [{
+          data: buildData(),
+          borderColor: 'rgba(33, 186, 69, .85)',
+          borderWidth: 1.5,
+          pointRadius: 0,
+          fill: false,
+          tension: 0
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: false,
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: 'rgba(255,255,255,.95)',
+            borderColor: 'rgba(0,0,0,.08)',
+            borderWidth: 1,
+            titleColor: '#616366',
+            bodyColor: '#616366',
+            callbacks: {
+              title: (items: Array<{ parsed: { x: number } }>) => {
+                const ts = items[0]?.parsed.x;
+                if (!ts) return '';
+                const d = new Date(ts);
+                const p = (v: number) => String(v).padStart(2, '0');
+                return `${p(d.getHours())}:${p(d.getMinutes())}`;
+              },
+              label: (item: { parsed: { y: number } }) => {
+                const y = item.parsed.y;
+                return y >= Y_MAX ? '超时' : `${y}ms`;
+              }
+            }
+          }
+        },
+        scales: {
+          x: {
+            type: 'time',
+            time: { unit: 'hour', displayFormats: { hour: 'HH:mm' } },
+            grid: { display: false },
+            ticks: { color: '#9da2a6', font: { size: 11 }, maxTicksLimit: 6 }
+          },
+          y: {
+            min: 0,
+            max: Y_MAX,
+            grid: { color: 'rgba(0,0,0,.06)' },
+            ticks: { display: false }
+          }
+        }
+      }
+    });
 
     onMounted(() => {
       if (!el.value) return;
-      chart = echarts.init(el.value);
-      chart.setOption(buildOption());
+      chart = new Chart(el.value, buildConfig());
+      window.setTimeout(() => {
+        ready.value = true;
+      }, 60);
     });
 
     watch(
       () => [props.values, props.startTs, props.iv],
       () => {
-        if (chart) chart.setOption(buildOption(), { notMerge: true });
+        if (!chart) return;
+        chart.data.datasets[0].data = buildData();
+        chart.update('none');
       }
     );
 
     onBeforeUnmount(() => {
       if (chart) {
-        chart.dispose();
+        chart.destroy();
         chart = null;
       }
     });
 
-    return { el };
+    return { el, ready };
   }
 });
 </script>
 <style scoped>
 .ping-chart {
+  position: relative;
   width: 100%;
   height: 200px;
+}
+
+.ping-chart canvas {
+  width: 100% !important;
+  height: 100% !important;
+  opacity: 0;
+  transition: opacity .28s cubic-bezier(.2, .8, .2, 1);
+}
+
+.ping-chart.is-ready canvas {
+  opacity: 1;
+}
+
+.ping-chart__loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  pointer-events: none;
+}
+
+.ping-chart__loading[hidden] {
+  display: none !important;
+}
+
+.ping-chart__loading span {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--hotaru-faint);
+  animation: ping-chart-dot 1.2s ease-in-out infinite;
+}
+
+.ping-chart__loading span:nth-child(2) {
+  animation-delay: .15s;
+}
+
+.ping-chart__loading span:nth-child(3) {
+  animation-delay: .3s;
+}
+
+@keyframes ping-chart-dot {
+  0%, to {
+    opacity: .25;
+    transform: translateY(0);
+  }
+  50% {
+    opacity: 1;
+    transform: translateY(-3px);
+  }
 }
 </style>
