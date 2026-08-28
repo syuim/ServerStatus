@@ -113,7 +113,7 @@ systemctl restart status-client
 
 sleep 3
 if systemctl is-active --quiet status-client; then
-  echo "✓ 接入成功: ${SS_USER}@${SERVER}:${PORT} (节点名: ${NAME})"
+  echo "✓ 接入成功: ${SS_USER}@${SERVER}:${PORT} (节点名: ${NAME:-$(hostname)})"
   echo "  日志: journalctl -u status-client -f"
 else
   echo "✗ 启动失败，查看日志: journalctl -u status-client --no-pager -n 30"
