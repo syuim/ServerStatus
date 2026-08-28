@@ -4,7 +4,7 @@
 # 可用参数: --server <地址> --port <端口> --key <密钥> --name <显示名>
 #           --tags <标签> --reset-day <每月几号> --quota <配额，如 1T>
 # 只需提供 --key（服务端 config.json 顶层 key）；user 由客户端自动生成，无需关心
-# 也可用环境变量覆盖: SERVER / PORT / KEY / TAGS / NAME / TRAFFIC_RESET_DAY / TRAFFIC_QUOTA
+# 也可用环境变量覆盖: SERVER / PORT / KEY / TAGS / NAME / TRAFFIC_RESET_DAY / TRAFFIC_QUOTA / CLIENT_DIR
 set -euo pipefail
 
 SERVER="${SERVER:-rn.127315.xyz}"
@@ -30,7 +30,7 @@ done
 REPO="syuim/ServerStatus"
 BRANCH="master"
 RAW="https://raw.githubusercontent.com/${REPO}/${BRANCH}"
-DIR="/usr/local/ServerStatus/client"
+DIR="${CLIENT_DIR:-/usr/local/ServerStatus/client}"
 SERVER_CONFIG="/usr/local/ServerStatus/server/config.json"
 
 fetch() { # fetch <url> <输出文件>
