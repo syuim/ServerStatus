@@ -66,11 +66,23 @@ export default defineComponent({
       data: {
         datasets: [{
           data: buildData(),
-          borderColor: 'rgba(33, 186, 69, .85)',
-          borderWidth: 1.5,
+          borderColor: 'rgba(33, 186, 69, .95)',
+          borderWidth: 2,
           pointRadius: 0,
+          pointHoverRadius: 4,
+          pointHoverBackgroundColor: '#21BA45',
+          pointHoverBorderColor: '#fff',
+          pointHoverBorderWidth: 2,
           spanGaps: false,
-          fill: false,
+          fill: true,
+          backgroundColor: (context: { chart: Chart }) => {
+            const { ctx, chartArea } = context.chart;
+            if (!chartArea) return 'rgba(33, 186, 69, .12)';
+            const g = ctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
+            g.addColorStop(0, 'rgba(33, 186, 69, .28)');
+            g.addColorStop(1, 'rgba(33, 186, 69, 0)');
+            return g;
+          },
           tension: 0
         }]
       },
@@ -112,8 +124,13 @@ export default defineComponent({
           y: {
             min: 0,
             max: Y_MAX,
-            grid: { color: 'rgba(0,0,0,.06)' },
-            ticks: { display: false }
+            grid: { color: 'rgba(0,0,0,.06)', borderDash: [3, 3] },
+            ticks: {
+              color: '#9da2a6',
+              font: { size: 11 },
+              padding: 6,
+              callback: (v: number) => `${v}ms`
+            }
           }
         }
       }
