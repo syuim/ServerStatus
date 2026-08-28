@@ -238,6 +238,12 @@ div.bar {
 
 /* 移动端只保留: 运行状态 / 节点名 / 网络 / CPU */
 @media only screen and (max-width: 720px) {
+  #table {
+    overflow-x: auto;
+    display: block;
+    -webkit-overflow-scrolling: touch;
+  }
+
   #location, tr td:nth-child(4) {
     display: none;
   }
@@ -255,6 +261,32 @@ div.bar {
     max-width: 60px;
     text-overflow: ellipsis;
     overflow: hidden;
+  }
+
+  /* 状态标记缩小为圆点 */
+  #table tr.tableRow td:first-child {
+    padding: .3em .2em !important;
+  }
+
+  #table tr.tableRow td:first-child div.progress {
+    max-width: 14px !important;
+    min-width: 14px !important;
+    height: 14px;
+    border-radius: 50%;
+    background: rgba(0,0,0,.1);
+  }
+
+  #table tr.tableRow td:first-child div.progress div.bar {
+    height: 14px;
+    line-height: 14px;
+    border-radius: 50%;
+    font-size: 0;
+    padding: 0;
+    color: transparent;
+  }
+
+  #table tr.tableRow td:first-child div.progress div.bar span {
+    display: none;
   }
 }
 </style>
