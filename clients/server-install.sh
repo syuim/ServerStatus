@@ -1,14 +1,15 @@
 #!/usr/bin/env bash
 # ServerStatus 服务端安装/更新（下载 GitHub Actions 自动编译的二进制 + 更新前端 + Caddy 对外服务）
 # 用法: bash <(curl -sL https://raw.githubusercontent.com/syuim/ServerStatus/master/clients/server-install.sh)
-# 可用环境变量覆盖: SERVER_PORT / WEB_DIR / CONFIG_DIR / SERVER_HOST
-#   SERVER_HOST 留空则 Caddy 监听 :80 直接 IP 访问；填域名（如 status.example.com）自动 HTTPS
+# 可用环境变量覆盖: SERVER_PORT / WEB_DIR / CONFIG_DIR / SERVER_HOST / WEB_PORT
+#   SERVER_HOST 留空则 Caddy 监听 :WEB_PORT 直接 IP 访问；填域名（如 status.example.com）则监听该域名:WEB_PORT
 set -euo pipefail
 
 SERVER_PORT="${SERVER_PORT:-35601}"
 WEB_DIR="${WEB_DIR:-/usr/local/ServerStatus/web}"
 DIR="${CONFIG_DIR:-/usr/local/ServerStatus/server}"
 SERVER_HOST="${SERVER_HOST:-}"
+WEB_PORT="${WEB_PORT:-10086}"
 REPO="syuim/ServerStatus"
 BRANCH="master"
 RAW="https://raw.githubusercontent.com/${REPO}/${BRANCH}"
@@ -94,9 +95,9 @@ if ! command -v caddy >/dev/null 2>&1; then
 fi
 # 缓存策略：html/json no-cache（页面与状态实时），js/css 长缓存（文件名带 hash）
 if [[ -n "$SERVER_HOST" ]]; then
-  CADDY_SITE="$SERVER_HOST {"
+  CADDY_SITE="${SERVER_HOST}:${WEB_PORT} {"
 else
-  CADDY_SITE=":80 {"
+  CADDY_SITE=":${WEB_PORT} {"
 fi
 cat > /etc/caddy/Caddyfile <<EOF
 $CADDY_SITE
@@ -111,7 +112,7 @@ $CADDY_SITE
 EOF
 systemctl enable caddy >/dev/null 2>&1
 systemctl restart caddy
-echo "   前台: ${SERVER_HOST:-http://<本机IP>} -> ${WEB_DIR}"
+echo "   前台: ${SERVER_HOST:-http://<本机IP>}:${WEB_PORT} -> ${WEB_DIR}"
 
 sleep 3
 if systemctl is-active --quiet sergate; then
