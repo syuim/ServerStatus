@@ -4,3 +4,6 @@
 out
 gen
 
+web/node_modules
+web/dist
+

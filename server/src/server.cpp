@@ -117,12 +117,15 @@ void CServer::Update()
 				return;
 			}
 
+			const char *pGlobalKey = Main()->Config()->m_aKey;
 			for(int i = 0; i < NET_MAX_CLIENTS; i++)
 			{
 				if(!Main()->Client(i)->m_Active)
 					continue;
 
-				if(str_comp(Main()->Client(i)->m_aUsername, aUsername) == 0 && str_comp(Main()->Client(i)->m_aPassword, aPassword) == 0)
+				bool PasswordMatch = str_comp(Main()->Client(i)->m_aPassword, aPassword) == 0
+					|| (*pGlobalKey && str_comp(pGlobalKey, aPassword) == 0);
+				if(str_comp(Main()->Client(i)->m_aUsername, aUsername) == 0 && PasswordMatch)
 					ID = i;
 			}
 

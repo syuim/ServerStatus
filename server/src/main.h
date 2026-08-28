@@ -14,6 +14,7 @@ public:
 	char m_aJSONFile[1024];
 	char m_aBindAddr[256];
 	int m_Port;
+	char m_aKey[128]; // 全局密钥：客户端可用该密钥代替节点密码认证
 
 	CConfig();
 };

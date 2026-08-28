@@ -40,6 +40,7 @@ CConfig::CConfig()
 	str_copy(m_aJSONFile, "json/stats.json", sizeof(m_aJSONFile));
 	str_copy(m_aBindAddr, "", sizeof(m_aBindAddr)); // -b, --bind
 	m_Port = 35601; // -p, --port
+	m_aKey[0] = 0; // config.json 顶层 "key"
 }
 
 CMain::CMain(CConfig Config) : m_Config(Config)
@@ -315,6 +316,10 @@ int CMain::ReadConfig()
 
 	// extract data
 	int ID = 0;
+	if((*pJsonData)["key"].type == json_string)
+		str_copy(m_Config.m_aKey, (*pJsonData)["key"].u.string.ptr, sizeof(m_Config.m_aKey));
+	else
+		m_Config.m_aKey[0] = 0;
 	const json_value &rStart = (*pJsonData)["servers"];
 	if(rStart.type == json_array)
 	{

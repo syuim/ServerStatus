@@ -6,15 +6,127 @@ import socket
 import time
 import re
 import os
+import sys
 import json
 import subprocess
+import threading
 from collections import deque
 
-SERVER = "127.0.0.1"
+SERVER = "rn.127315.xyz"
 PORT = 35601
-USER = "USER"
-PASSWORD = "USER_PASSWORD"
+USER = "suyu"
+PASSWORD = "68f30717b2bf0a5d33ed7a53c8f40bff"
 INTERVAL = 1  # 更新间隔，单位：秒
+
+# 节点标签，展示在前端展开行，可自定义；color 可选: blue/red/yellow/grey(默认)
+TAGS = [
+    {"text": "NODE"},
+]
+
+# Ping 目标（名称, 主机, 端口）：三网探测点；无 ping 命令时 TCP 回退用指定端口
+PING_TARGETS = [
+    ('CT', 'ct.127315.xyz', 80),  # 电信
+    ('CU', 'cu.127315.xyz', 80),  # 联通
+    ('CM', 'cm.127315.xyz', 80),  # 移动
+]
+PING_INTERVAL = 60   # 每轮 TCPing 间隔（秒）
+PING_TIMEOUT = 3
+PING_HISTORY = 20    # 保留的历史点数；custom 字段上限 512 字节，不宜增大
+
+
+def get_os():
+    try:
+        with open('/etc/os-release', 'r') as f:
+            for line in f:
+                if line.startswith('PRETTY_NAME='):
+                    return line.split('=', 1)[1].strip().strip('"')
+    except IOError:
+        pass
+    return ''
+
+
+def get_custom():
+    cpu_model = ''
+    cores = 0
+    try:
+        with open('/proc/cpuinfo', 'r') as f:
+            for line in f:
+                if line.startswith('model name') and not cpu_model:
+                    cpu_model = line.split(':')[1].strip()
+                elif line.startswith('processor'):
+                    cores += 1
+    except IOError:
+        pass
+    data = {'os': get_os(), 'cpu_model': cpu_model, 'cores': cores, 'tags': TAGS}
+    if PING_TARGETS:
+        data['ping'] = ping_collector.summary()
+    return json.dumps(data)
+
+
+class PingCollector(object):
+    """后台线程定期 ping 各目标（ICMP 优先，无 ping 命令时回退 TCPing），保留最近 N 轮延迟（毫秒，-1 表示失败）"""
+
+    def __init__(self):
+        self.results = dict((name, deque(maxlen=PING_HISTORY)) for name, _, _ in PING_TARGETS)
+        self.lock = threading.Lock()
+        self._stop = threading.Event()
+        self.use_icmp = self._icmp_available()
+        if PING_TARGETS:
+            t = threading.Thread(target=self._run)
+            t.daemon = True
+            t.start()
+
+    @staticmethod
+    def _icmp_available():
+        try:
+            subprocess.check_output(['ping', '-c', '1', '-W', '1', '127.0.0.1'], stderr=subprocess.STDOUT)
+        except OSError:
+            return False
+        except Exception:
+            pass
+        return True
+
+    @staticmethod
+    def _icmp_ping(host):
+        # Linux ping -W 单位为秒，macOS 为毫秒
+        if sys.platform == 'darwin':
+            cmd = ['ping', '-c', '1', '-W', str(PING_TIMEOUT * 1000), host]
+        else:
+            cmd = ['ping', '-c', '1', '-W', str(PING_TIMEOUT), host]
+        try:
+            out = subprocess.check_output(cmd, stderr=subprocess.STDOUT)
+            m = re.search(r'time[=<]\s*([\d.]+)\s*ms', out.decode('utf-8', 'ignore'))
+            if m:
+                return int(round(float(m.group(1))))
+            return -1
+        except Exception:
+            return -1
+
+    def _tcping(self, host, port):
+        start = time.time()
+        try:
+            socket.create_connection((host, port), PING_TIMEOUT).close()
+            return int(round((time.time() - start) * 1000))
+        except Exception:
+            return -1
+
+    def _run(self):
+        while not self._stop.is_set():
+            for name, host, port in PING_TARGETS:
+                if self.use_icmp:
+                    ms = self._icmp_ping(host)
+                else:
+                    ms = self._tcping(host, port)
+                with self.lock:
+                    self.results[name].append(ms)
+            self._stop.wait(PING_INTERVAL)
+
+    def summary(self):
+        with self.lock:
+            return dict((name, list(values)) for name, values in self.results.items())
+
+
+ping_collector = PingCollector()
 
 
 def check_interface(net_name):
@@ -199,6 +311,7 @@ if __name__ == '__main__':
                 array['network_tx'] = NetTx
                 array['network_in'] = NET_IN
                 array['network_out'] = NET_OUT
+                array['custom'] = get_custom()
                 s.send(("update " + json.dumps(array) + '\n').encode('utf-8'))
         except KeyboardInterrupt:
             raise
