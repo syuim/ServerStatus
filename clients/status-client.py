@@ -8,6 +8,7 @@ import re
 import os
 import sys
 import json
+import uuid
 import signal
 import calendar
 import subprocess
@@ -17,11 +18,31 @@ from datetime import datetime
 
 SERVER = "rn.127315.xyz"
 PORT = 35601
-# user 由安装脚本自动取主机名（协议要求，但无需配置）；密钥由 client-install.sh 注入
-USER = ""
 # 密钥（服务端 config.json 顶层 key），由 client-install.sh 注入，不内置在仓库
 PASSWORD = ""
 INTERVAL = 1  # 更新间隔，单位：秒
+
+
+def get_node_id():
+    # 协议标识：本地持久化 UUID，客户端自动生成，用户无需感知 user 概念
+    id_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'node.id')
+    try:
+        with open(id_file) as f:
+            nid = f.read().strip()
+        if nid:
+            return nid
+    except IOError:
+        pass
+    nid = uuid.uuid4().hex[:16]
+    try:
+        with open(id_file, 'w') as f:
+            f.write(nid)
+    except IOError:
+        pass
+    return nid
+
+
+NODE_ID = get_node_id()
 
 # 节点标签，展示在前端展开行，可自定义；color 可选: blue/red/yellow/grey(默认)
 TAGS = [
@@ -465,7 +486,7 @@ if __name__ == '__main__':
             s = socket.create_connection((SERVER, PORT))
             data = s.recv(1024).decode()
             if data.find('Authentication required') > -1:
-                s.send((USER + ':' + PASSWORD + '\n').encode('utf-8'))
+                s.send((NODE_ID + ':' + PASSWORD + '\n').encode('utf-8'))
                 data = s.recv(1024).decode()
                 if data.find('Authentication successful') < 0:
                     print(data)

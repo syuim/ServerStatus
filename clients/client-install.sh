@@ -1,17 +1,14 @@
 #!/usr/bin/env bash
 # ServerStatus 客户端一键接入（从 GitHub 下载）
 # 用法: bash <(curl -sL https://raw.githubusercontent.com/syuim/ServerStatus/master/clients/client-install.sh)
-# 可用参数: --server <地址> --port <端口> --key <密钥> --name <节点名>
+# 可用参数: --server <地址> --port <端口> --key <密钥> --name <显示名>
 #           --tags <标签> --reset-day <每月几号> --quota <配额，如 1T>
-# 只需提供 --key（服务端 config.json 顶层 key）；--user 可选，默认取主机名
-# 也可用环境变量覆盖: SERVER / PORT / SS_USER / KEY / TAGS / NAME / TRAFFIC_RESET_DAY / TRAFFIC_QUOTA
+# 只需提供 --key（服务端 config.json 顶层 key）；user 由客户端自动生成，无需关心
+# 也可用环境变量覆盖: SERVER / PORT / KEY / TAGS / NAME / TRAFFIC_RESET_DAY / TRAFFIC_QUOTA
 set -euo pipefail
 
 SERVER="${SERVER:-rn.127315.xyz}"
 PORT="${PORT:-35601}"
-# 注意: 不能叫 USER，会与 shell 内置 $USER 冲突
-# 全局密钥模式下 user 只是唯一标识：默认用主机名，无需预先注册/指定
-SS_USER="${SS_USER:-$(hostname)}"
 KEY="${KEY:-}"
 NAME="${NAME:-}"
 TAGS="${TAGS:-}"
@@ -22,7 +19,6 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --server) SERVER="${2:-}"; shift 2 ;;
     --port) PORT="${2:-}"; shift 2 ;;
-    --user) SS_USER="${2:-}"; shift 2 ;;
     --key) KEY="${2:-}"; shift 2 ;;
     --name) NAME="${2:-}"; shift 2 ;;
     --tags) TAGS="${2:-}"; shift 2 ;;
@@ -77,7 +73,6 @@ if [[ -z "$KEY" ]]; then
 fi
 sed -i "s|^SERVER = .*|SERVER = \"${SERVER}\"|" "$DIR/status-client.py"
 sed -i "s|^PORT = .*|PORT = ${PORT}|" "$DIR/status-client.py"
-sed -i "s|^USER = .*|USER = \"${SS_USER}\"|" "$DIR/status-client.py"
 sed -i "s|^PASSWORD = .*|PASSWORD = \"${KEY}\"|" "$DIR/status-client.py"
 sed -i "s|^NODE_NAME = .*|NODE_NAME = \"${NAME}\"|" "$DIR/status-client.py"
 sed -i "s|^TRAFFIC_RESET_DAY = .*|TRAFFIC_RESET_DAY = ${TRAFFIC_RESET_DAY}|" "$DIR/status-client.py"
@@ -120,37 +115,6 @@ open(path, 'w', encoding='utf-8').write(src)
 PYEOF
 fi
 
-echo ">> 配置服务端节点 ..."
-if [[ -f "$SERVER_CONFIG" ]]; then
-  $PYTHON - "$SERVER_CONFIG" "$SS_USER" "$KEY" "$NAME" <<'PYEOF'
-import json
-import socket
-import sys
-path, user, key, name = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
-with open(path) as f:
-    cfg = json.load(f)
-servers = cfg.setdefault('servers', [])
-for s in servers:
-    if s.get('username') == user:
-        s['password'] = key
-        if name:
-            s['name'] = name
-        print("   节点 %s 已存在，密钥已更新%s" % (user, '，节点名替换为 %s' % name if name else ''))
-        break
-else:
-    servers.append({
-        'username': user, 'password': key, 'name': name or socket.gethostname(),
-        'type': 'KVM', 'host': '', 'location': '', 'disabled': False, 'region': ''
-    })
-    print("   节点 %s 不存在，已添加 (name=%s)" % (user, name or socket.gethostname()))
-with open(path, 'w') as f:
-    json.dump(cfg, f, indent=1)
-PYEOF
-  systemctl restart sergate 2>/dev/null || true
-else
-  echo "   未检测到本机服务端，跳过"
-fi
-
 echo ">> 安装 systemd 服务 ..."
 systemctl daemon-reload
 systemctl enable status-client >/dev/null 2>&1
@@ -158,7 +122,7 @@ systemctl restart status-client
 
 sleep 3
 if systemctl is-active --quiet status-client; then
-  echo "✓ 接入成功: ${SS_USER}@${SERVER}:${PORT} (节点名: ${NAME:-$(hostname)})"
+  echo "✓ 接入成功: ${SERVER}:${PORT} (显示名: ${NAME:-$(hostname)})"
   echo "  日志: journalctl -u status-client -f"
 else
   echo "✗ 启动失败，查看日志: journalctl -u status-client --no-pager -n 30"
