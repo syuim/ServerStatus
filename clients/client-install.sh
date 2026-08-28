@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # ServerStatus 客户端一键接入（从 GitHub 下载）
 # 用法: bash <(curl -sL https://raw.githubusercontent.com/syuim/ServerStatus/master/clients/client-install.sh)
-# 可用参数: --server <地址> --port <端口> --user <用户名> --key <密钥>
-#           --name <节点名> --tags <标签> --reset-day <每月几号> --quota <配额，如 1T>
+# 可用参数: --server <地址> --port <端口> --key <密钥> --name <节点名>
+#           --tags <标签> --reset-day <每月几号> --quota <配额，如 1T>
+# 只需提供 --key（服务端 config.json 顶层 key）；--user 可选，默认取主机名
 # 也可用环境变量覆盖: SERVER / PORT / SS_USER / KEY / TAGS / NAME / TRAFFIC_RESET_DAY / TRAFFIC_QUOTA
 set -euo pipefail
 

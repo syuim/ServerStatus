@@ -17,8 +17,9 @@ from datetime import datetime
 
 SERVER = "rn.127315.xyz"
 PORT = 35601
-USER = "suyu"
-# 密钥由 client-install.sh 注入（KEY 环境变量或本机服务端 config.json 全局 key），不内置在仓库
+# user 由安装脚本自动取主机名（协议要求，但无需配置）；密钥由 client-install.sh 注入
+USER = ""
+# 密钥（服务端 config.json 顶层 key），由 client-install.sh 注入，不内置在仓库
 PASSWORD = ""
 INTERVAL = 1  # 更新间隔，单位：秒
 
