@@ -59,6 +59,8 @@ echo ">> 下载客户端 ..."
 mkdir -p "$DIR"
 fetch "$RAW/clients/status-client.py" "$DIR/status-client.py"
 fetch "$RAW/service/status-client.service" /etc/systemd/system/status-client.service
+# 按实际安装目录修正 service 文件（支持 CLIENT_DIR 覆盖）
+sed -i "s|/usr/local/ServerStatus/client|$DIR|g" /etc/systemd/system/status-client.service
 
 echo ">> 写入配置 ..."
 # 密钥不内置在仓库：优先取环境变量 KEY，否则读本机服务端 config.json 的全局 key
