@@ -9,7 +9,8 @@ set -euo pipefail
 SERVER="${SERVER:-rn.127315.xyz}"
 PORT="${PORT:-35601}"
 # 注意: 不能叫 USER，会与 shell 内置 $USER 冲突
-SS_USER="${SS_USER:-suyu}"
+# 全局密钥模式下 user 只是唯一标识：默认用主机名，无需预先注册/指定
+SS_USER="${SS_USER:-$(hostname)}"
 KEY="${KEY:-}"
 NAME="${NAME:-}"
 TAGS="${TAGS:-}"
