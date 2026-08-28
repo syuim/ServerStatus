@@ -63,24 +63,24 @@
             }}</span>
         </div>
         <div class="ping-panel" v-if="getStatus && pingSeries.length" @click.stop>
-          <div class="ping-tabs">
-            <button v-for="s in pingSeries" :key="s.name" type="button"
-                    class="ping-tab" :class="{active: s.name === activePing}"
-                    @click="activePing = s.name">{{ s.name }}
-            </button>
+          <div class="ping-head">
+            <div class="ping-tabs">
+              <button v-for="s in pingSeries" :key="s.name" type="button"
+                      class="ping-tab" :class="{active: s.name === activePing}"
+                      @click="activePing = s.name">{{ s.name }}
+              </button>
+            </div>
+            <div class="ping-stats">
+              <span class="ping-stat ping-stat--avg">{{ activeAvgText }}</span>
+              <span class="ping-stat ping-stat--loss">{{ activeLossText }}</span>
+            </div>
           </div>
           <svg class="ping-chart" :viewBox="`0 0 ${CHART_W} ${CHART_H}`" preserveAspectRatio="none">
             <g v-for="gy in gridYs" :key="gy">
               <line :x1="0" :y1="gy" :x2="CHART_W" :y2="gy" class="grid-line"/>
             </g>
-            <polyline :points="activePoints" class="ping-line"/>
-            <circle v-for="(p, i) in activeDots" :key="i" :cx="p.x" :cy="p.y" r="2" class="ping-dot"/>
+            <rect v-for="b in activeBars" :key="b.i" :x="b.x" :y="b.y" :width="b.w" :height="b.h" class="ping-bar"/>
           </svg>
-          <div class="ping-stats">
-            <span class="ping-stat">平均 <b>{{ activeAvg }}ms</b></span>
-            <span class="ping-stat">丢包 <b>{{ activeLoss }}%</b></span>
-            <span class="ping-stat">最近 <b>{{ activeLast }}</b></span>
-          </div>
         </div>
       </div>
     </td>
@@ -106,7 +106,7 @@ interface CustomData {
 }
 
 const CHART_W = 560;
-const CHART_H = 100;
+const CHART_H = 200;
 
 export default defineComponent({
   name: 'TableItem',
@@ -170,12 +170,8 @@ export default defineComponent({
       if (!s || !s.values.length) return '–';
       return Math.round((s.values.length - validValues.value.length) / s.values.length * 1000) / 10;
     });
-    const activeLast = computed(() => {
-      const s = currentSeries.value;
-      if (!s || !s.values.length) return '–';
-      const last = s.values[s.values.length - 1];
-      return last >= 0 ? `${last}ms` : '超时';
-    });
+    const activeAvgText = computed(() => activeAvg.value === '–' ? '–' : `${activeAvg.value}ms`);
+    const activeLossText = computed(() => activeLoss.value === '–' ? '–' : `${activeLoss.value}%`);
     const yScale = computed(() => {
       const vals = validValues.value;
       const max = vals.length ? Math.max(...vals) : 0;
@@ -185,39 +181,25 @@ export default defineComponent({
       const step = yScale.value / 4;
       return [1, 2, 3].map(i => Math.round(CHART_H - (i * step) / yScale.value * CHART_H));
     });
-    const activePoints = computed(() => {
-      const s = currentSeries.value;
-      if (!s) return '';
-      const n = s.values.length;
-      const gap = n > 1 ? CHART_W / (n - 1) : 0;
-      let last = '';
-      return s.values.map((v, i) => {
-        const x = n > 1 ? i * gap : CHART_W / 2;
-        if (v < 0) {
-          last = '';
-          return '';
-        }
-        const y = CHART_H - Math.min(v / yScale.value, 1) * (CHART_H - 6) - 3;
-        const pt = `${x.toFixed(1)},${y.toFixed(1)}`;
-        const joined = last ? `${last} ${pt}` : pt;
-        last = pt;
-        return joined;
-      }).filter(Boolean).join(' ');
-    });
-    const activeDots = computed(() => {
+    const activeBars = computed(() => {
       const s = currentSeries.value;
       if (!s) return [];
       const n = s.values.length;
-      const gap = n > 1 ? CHART_W / (n - 1) : 0;
-      const dots: Array<{ x: number; y: number }> = [];
+      const slot = CHART_W / n;
+      const barW = Math.max(2, slot * 0.55);
+      const bars: Array<{ i: number; x: number; y: number; w: number; h: number }> = [];
       s.values.forEach((v, i) => {
         if (v < 0) return;
-        dots.push({
-          x: n > 1 ? i * gap : CHART_W / 2,
-          y: CHART_H - Math.min(v / yScale.value, 1) * (CHART_H - 6) - 3
+        const h = Math.min(v / yScale.value, 1) * (CHART_H - 8);
+        bars.push({
+          i,
+          x: i * slot + (slot - barW) / 2,
+          y: CHART_H - h - 4,
+          w: barW,
+          h
         });
       });
-      return dots;
+      return bars;
     });
     return {
       collapsed,
@@ -226,11 +208,9 @@ export default defineComponent({
       tags,
       pingSeries,
       activePing,
-      activeAvg,
-      activeLoss,
-      activeLast,
-      activePoints,
-      activeDots,
+      activeAvgText,
+      activeLossText,
+      activeBars,
       gridYs,
       CHART_W,
       CHART_H,
@@ -262,7 +242,7 @@ tr.expandRow td {
 .expand-inner {
   overflow: hidden;
   transition: max-height .5s ease;
-  max-height: 22em;
+  max-height: 34em;
   text-align: center;
 }
 
@@ -310,39 +290,57 @@ tr.expandRow td {
 
 .ping-panel {
   margin-top: .5em;
-  text-align: center;
+}
+
+.ping-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 10px;
 }
 
 .ping-tabs {
-  display: inline-flex;
-  gap: .3em;
-  margin-bottom: .3em;
+  display: flex;
+  gap: 5px;
 }
 
 .ping-tab {
-  border: 1px solid rgba(0, 0, 0, .1);
-  border-radius: .28571429rem;
+  border: none;
+  border-radius: 6px;
   background: #e8e8e8;
   color: #616366;
-  font-weight: bold;
+  font-weight: 700;
   font-size: .8rem;
   line-height: 1;
-  padding: .5em .9em;
+  padding: 4px 10px;
   cursor: pointer;
 }
 
 .ping-tab.active {
   background: #21BA45;
   color: #fff;
-  border-color: #21BA45;
+}
+
+.ping-stats {
+  display: flex;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.ping-stat {
+  background: rgba(0, 0, 0, .05);
+  border-radius: 4px;
+  color: #616366;
+  font-size: .78rem;
+  font-weight: 700;
+  line-height: 1;
+  padding: 5.5px 9px;
 }
 
 .ping-chart {
   display: block;
   width: 100%;
-  max-width: 560px;
-  height: 100px;
-  margin: 0 auto;
+  height: 200px;
 }
 
 .grid-line {
@@ -350,28 +348,8 @@ tr.expandRow td {
   stroke-width: 1;
 }
 
-.ping-line {
-  fill: none;
-  stroke: #21BA45;
-  stroke-width: 1.5;
-}
-
-.ping-dot {
+.ping-bar {
   fill: #21BA45;
-}
-
-.ping-stats {
-  margin-top: .3em;
-  font-size: .85rem;
-  color: #616366;
-}
-
-.ping-stat {
-  margin: 0 .6em;
-}
-
-.ping-stat b {
-  font-weight: bold;
 }
 
 div.progress {
