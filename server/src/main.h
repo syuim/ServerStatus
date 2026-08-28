@@ -94,6 +94,7 @@ public:
 	void AppendPing(const char *pNode, const char *pLine, int64 t, int v);
 	void WriteHistoryFile(const CConfig *pConfig);
 	void LoadHistoryFile(const CConfig *pConfig);
+	void AddConfigClient(const char *pUsername, const char *pPassword);
 public:
 	CMain(CConfig Config);
 

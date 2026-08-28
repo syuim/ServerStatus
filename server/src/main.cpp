@@ -393,6 +393,127 @@ void CMain::LoadHistoryFile(const CConfig *pConfig)
 	mem_free(pFileData);
 }
 
+void CMain::AddConfigClient(const char *pUsername, const char *pPassword)
+{
+	// 全局密钥认证动态注册的节点持久化到 config.json（去重 + 原子写）
+	IOHANDLE File = io_open(m_Config.m_aConfigFile, IOFLAG_READ);
+	if(!File)
+		return;
+	int FileSize = (int)io_length(File);
+	char *pFileData = (char *)mem_alloc(FileSize + 1, 1);
+	if(!pFileData)
+	{
+		io_close(File);
+		return;
+	}
+	io_read(File, pFileData, FileSize);
+	pFileData[FileSize] = 0;
+	io_close(File);
+
+	// 已存在则不重复添加
+	json_settings JsonSettings;
+	mem_zero(&JsonSettings, sizeof(JsonSettings));
+	char aError[256];
+	json_value *pJsonData = json_parse_ex(&JsonSettings, pFileData, FileSize, aError);
+	if(pJsonData)
+	{
+		const json_value &rServers = (*pJsonData)["servers"];
+		if(rServers.type == json_array)
+		{
+			for(unsigned i = 0; i < rServers.u.array.length; i++)
+			{
+				if(rServers[i]["username"].type == json_string &&
+					str_comp(rServers[i]["username"].u.string.ptr, pUsername) == 0)
+				{
+					json_value_free(pJsonData);
+					mem_free(pFileData);
+					return;
+				}
+			}
+		}
+		json_value_free(pJsonData);
+	}
+
+	const char *pServers = str_find(pFileData, "\"servers\"");
+	const char *pOpen = pServers ? str_find(pServers, "[") : 0;
+	const char *pClose = 0;
+	if(pOpen)
+	{
+		int Depth = 0;
+		for(const char *p = pOpen; *p; p++)
+		{
+			if(*p == '[')
+				Depth++;
+			else if(*p == ']' && --Depth == 0)
+			{
+				pClose = p;
+				break;
+			}
+		}
+	}
+	if(!pOpen || !pClose)
+	{
+		mem_free(pFileData);
+		return;
+	}
+
+	// 转义 username 防 JSON 注入
+	char aEscaped[256];
+	const char *pSrc = pUsername;
+	char *pDst = aEscaped;
+	for(; *pSrc && pDst - aEscaped < (int)sizeof(aEscaped) - 2; pSrc++)
+	{
+		if(*pSrc == '"' || *pSrc == '\\')
+			*pDst++ = '\\';
+		*pDst++ = *pSrc;
+	}
+	*pDst = 0;
+
+	char aEntry[512];
+	str_format(aEntry, sizeof(aEntry), "{\"username\":\"%s\",\"password\":\"%s\",\"name\":\"%s\",\"type\":\"KVM\",\"host\":\"\",\"location\":\"\",\"disabled\":false,\"region\":\"\"}",
+		aEscaped, pPassword, aEscaped);
+
+	bool EmptyArray = true;
+	for(const char *p = pOpen + 1; p < pClose; p++)
+	{
+		if(*p != ' ' && *p != '\t' && *p != '\n' && *p != '\r')
+		{
+			EmptyArray = false;
+			break;
+		}
+	}
+
+	int HeadLen = (int)(pClose - pFileData);
+	int NewSize = FileSize + (int)str_length(aEntry) + (EmptyArray ? 1 : 3);
+	char *pNewData = (char *)mem_alloc(NewSize, 1);
+	if(!pNewData)
+	{
+		mem_free(pFileData);
+		return;
+	}
+	mem_copy(pNewData, pFileData, HeadLen);
+	char *pW = pNewData + HeadLen;
+	if(!EmptyArray)
+		*pW++ = ',';
+	str_copy(pW, aEntry, NewSize - (int)(pW - pNewData));
+	pW += strlen(pW);
+	str_copy(pW, pFileData + HeadLen, NewSize - (int)(pW - pNewData));
+	mem_free(pFileData);
+
+	char aTmpPath[1100];
+	str_format(aTmpPath, sizeof(aTmpPath), "%s.tmp", m_Config.m_aConfigFile);
+	IOHANDLE OutFile = io_open(aTmpPath, IOFLAG_WRITE);
+	if(OutFile)
+	{
+		io_write(OutFile, pNewData, (unsigned)strlen(pNewData));
+		io_flush(OutFile);
+		io_close(OutFile);
+		fs_rename(aTmpPath, m_Config.m_aConfigFile);
+		dbg_msg("main", "config: added client '%s'", pUsername);
+	}
+	mem_free(pNewData);
+}
+
 void CMain::JSONUpdateThread(void *pUser)
 {
 	CJSONUpdateThreadData *m_pJSONUpdateThreadData = (CJSONUpdateThreadData *)pUser;

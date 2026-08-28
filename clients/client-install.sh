@@ -8,7 +8,7 @@ SERVER="${SERVER:-rn.127315.xyz}"
 PORT="${PORT:-35601}"
 # 注意: 不能叫 USER，会与 shell 内置 $USER 冲突
 SS_USER="${SS_USER:-suyu}"
-KEY="${KEY:-68f30717b2bf0a5d33ed7a53c8f40bff}"
+KEY="${KEY:-}"
 NAME="${NAME:-}"
 TAGS="${TAGS:-}"
 TRAFFIC_RESET_DAY="${TRAFFIC_RESET_DAY:-1}"
@@ -18,6 +18,7 @@ BRANCH="master"
 RAW="https://raw.githubusercontent.com/${REPO}/${BRANCH}"
 MIRROR="https://cdn.jsdelivr.net/gh/${REPO}@${BRANCH}"
 DIR="/usr/local/ServerStatus/client"
+SERVER_CONFIG="/usr/local/ServerStatus/server/config.json"
 
 fetch() { # fetch <url> <输出文件>
   if curl -sSL --fail --connect-timeout 8 -o "$2" "$1"; then return 0; fi
@@ -49,6 +50,16 @@ fetch "$RAW/clients/status-client.py" "$DIR/status-client.py"
 fetch "$RAW/service/status-client.service" /etc/systemd/system/status-client.service
 
 echo ">> 写入配置 ..."
+# 密钥不内置在仓库：优先取环境变量 KEY，否则读本机服务端 config.json 的全局 key
+if [[ -z "$KEY" ]]; then
+  if [[ -f "$SERVER_CONFIG" ]]; then
+    KEY=$($PYTHON -c "import json;print(json.load(open('$SERVER_CONFIG')).get('key') or '')" 2>/dev/null || true)
+  fi
+  if [[ -z "$KEY" ]]; then
+    echo "✗ 未提供 KEY：请通过 KEY=<服务端config.json顶层key> 传入（或本机已有服务端时自动读取）"
+    exit 1
+  fi
+fi
 sed -i "s|^SERVER = .*|SERVER = \"${SERVER}\"|" "$DIR/status-client.py"
 sed -i "s|^PORT = .*|PORT = ${PORT}|" "$DIR/status-client.py"
 sed -i "s|^USER = .*|USER = \"${SS_USER}\"|" "$DIR/status-client.py"
@@ -94,7 +105,6 @@ PYEOF
 fi
 
 echo ">> 配置服务端节点 ..."
-SERVER_CONFIG="/usr/local/ServerStatus/server/config.json"
 if [[ -f "$SERVER_CONFIG" ]]; then
   $PYTHON - "$SERVER_CONFIG" "$SS_USER" "$KEY" "$NAME" <<'PYEOF'
 import json

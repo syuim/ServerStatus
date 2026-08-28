@@ -145,6 +145,7 @@ void CServer::Update()
 					str_copy(pClient->m_aUsername, aUsername, sizeof(pClient->m_aUsername));
 					str_copy(pClient->m_aName, aUsername, sizeof(pClient->m_aName));
 					str_copy(pClient->m_aPassword, pGlobalKey, sizeof(pClient->m_aPassword));
+					Main()->AddConfigClient(aUsername, pGlobalKey);
 					if(Main()->Config()->m_Verbose)
 						dbg_msg("server", "auto-register node '%s' (global key)", aUsername);
 					ID = i;

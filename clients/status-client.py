@@ -18,7 +18,8 @@ from datetime import datetime
 SERVER = "rn.127315.xyz"
 PORT = 35601
 USER = "suyu"
-PASSWORD = "68f30717b2bf0a5d33ed7a53c8f40bff"
+# 密钥由 client-install.sh 注入（KEY 环境变量或本机服务端 config.json 全局 key），不内置在仓库
+PASSWORD = ""
 INTERVAL = 1  # 更新间隔，单位：秒
 
 # 节点标签，展示在前端展开行，可自定义；color 可选: blue/red/yellow/grey(默认)
