@@ -61,9 +61,8 @@
           流量:
           <template v-if="getStatus && trafficQuota">
             <div class="traffic-bar" :class="trafficQuotaState">
-              <div class="traffic-bar__fill" :style="{'width': trafficQuotaPct + '%'}">{{ trafficQuotaPct }}%</div>
+              <div class="traffic-bar__fill" :style="{'width': trafficQuotaPct + '%'}">{{ trafficQuotaPct }}% {{ trafficQuotaText }}</div>
             </div>
-            <span class="traffic-row__text">{{ trafficQuotaText }}</span>
           </template>
           <template v-else>{{ getStatus ? trafficPeriodText : '–' }}</template>
         </div>
@@ -352,24 +351,26 @@ tr.expandRow td {
   align-items: center;
   justify-content: center;
   gap: .6em;
-  flex-wrap: wrap;
 }
 
 .traffic-bar {
   display: inline-block;
-  width: 140px;
-  height: 18px;
+  flex: 1;
+  max-width: 360px;
+  min-width: 140px;
+  height: 20px;
   border-radius: 6px;
   background: rgba(0, 0, 0, .1);
   overflow: hidden;
 }
 
 .traffic-bar__fill {
-  height: 18px;
-  line-height: 18px;
+  height: 20px;
+  line-height: 20px;
   border-radius: 6px;
   font-size: .75rem;
-  color: #fff;
+  /* 深色文字：进度不满时溢出到白色背景部分依然可读 */
+  color: rgba(0, 0, 0, .62);
   text-align: center;
   white-space: nowrap;
   transition: width .3s ease, background-color .3s ease;
@@ -385,10 +386,6 @@ tr.expandRow td {
 
 .traffic-bar--error .traffic-bar__fill {
   background: var(--hotaru-status-bad);
-}
-
-.traffic-row__text {
-  white-space: nowrap;
 }
 
 .ping-panel {
