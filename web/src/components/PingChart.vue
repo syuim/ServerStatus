@@ -117,7 +117,10 @@ export default defineComponent({
         scales: {
           x: {
             type: 'time',
-            time: { unit: 'hour', displayFormats: { hour: 'HH:mm' } },
+            time: {
+              minUnit: 'minute',
+              displayFormats: { minute: 'HH:mm', hour: 'HH:mm' }
+            },
             grid: { display: false },
             ticks: { color: '#9da2a6', font: { size: 11 }, maxTicksLimit: 6 }
           },
