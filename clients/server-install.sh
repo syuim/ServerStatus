@@ -1,12 +1,14 @@
 #!/usr/bin/env bash
-# ServerStatus 服务端安装/更新（下载 GitHub Actions 自动编译的二进制 + 更新前端，存在则替换）
+# ServerStatus 服务端安装/更新（下载 GitHub Actions 自动编译的二进制 + 更新前端 + Caddy 对外服务）
 # 用法: bash <(curl -sL https://raw.githubusercontent.com/syuim/ServerStatus/master/clients/server-install.sh)
-# 可用环境变量覆盖: SERVER_PORT / WEB_DIR / CONFIG_DIR
+# 可用环境变量覆盖: SERVER_PORT / WEB_DIR / CONFIG_DIR / SERVER_HOST
+#   SERVER_HOST 留空则 Caddy 监听 :80 直接 IP 访问；填域名（如 status.example.com）自动 HTTPS
 set -euo pipefail
 
 SERVER_PORT="${SERVER_PORT:-35601}"
 WEB_DIR="${WEB_DIR:-/usr/local/ServerStatus/web}"
 DIR="${CONFIG_DIR:-/usr/local/ServerStatus/server}"
+SERVER_HOST="${SERVER_HOST:-}"
 REPO="syuim/ServerStatus"
 BRANCH="master"
 RAW="https://raw.githubusercontent.com/${REPO}/${BRANCH}"
@@ -85,6 +87,31 @@ sed -i "s|/usr/local/ServerStatus/server/sergate|$DIR/sergate|g; s|/usr/local/Se
 systemctl daemon-reload
 systemctl enable sergate >/dev/null 2>&1
 systemctl restart sergate
+
+echo ">> 安装 Caddy 对外服务 ..."
+if ! command -v caddy >/dev/null 2>&1; then
+  (apt-get update -qq && apt-get install -y caddy) || yum install -y caddy
+fi
+# 缓存策略：html/json no-cache（页面与状态实时），js/css 长缓存（文件名带 hash）
+if [[ -n "$SERVER_HOST" ]]; then
+  CADDY_SITE="$SERVER_HOST {"
+else
+  CADDY_SITE=":80 {"
+fi
+cat > /etc/caddy/Caddyfile <<EOF
+$CADDY_SITE
+	root * $WEB_DIR
+	@json path /json/*.json
+	header @json Cache-Control "no-cache"
+	header /index.html Cache-Control "no-cache"
+	header /js/*.js Cache-Control "public, max-age=31536000, immutable"
+	header /css/*.css Cache-Control "public, max-age=31536000, immutable"
+	file_server
+}
+EOF
+systemctl enable caddy >/dev/null 2>&1
+systemctl restart caddy
+echo "   前台: ${SERVER_HOST:-http://<本机IP>} -> ${WEB_DIR}"
 
 sleep 3
 if systemctl is-active --quiet sergate; then
