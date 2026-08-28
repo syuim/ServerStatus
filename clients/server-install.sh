@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# ServerStatus 服务端安装/更新（从 GitHub 下载源码编译，存在则替换）
+# ServerStatus 服务端安装/更新（从 GitHub 下载源码编译 + 更新前端，存在则替换）
 # 用法: bash <(curl -sL https://raw.githubusercontent.com/syuim/ServerStatus/master/clients/server-install.sh)
 # 可用环境变量覆盖: SERVER_PORT / WEB_DIR / CONFIG_DIR
 set -euo pipefail
@@ -81,6 +81,33 @@ if [[ ! -f "$DIR/config.json" ]]; then
 }
 EOF
   echo "   已生成 config.json（全局密钥: $KEY，安装客户端时用 KEY=$KEY）"
+fi
+
+echo ">> 更新前端 (web/dist) ..."
+WEB_TMP="/tmp/serverstatus-web"
+rm -rf "$WEB_TMP"
+mkdir -p "$WEB_TMP"
+TARBALL="https://codeload.github.com/${REPO}/tar.gz/refs/heads/${BRANCH}"
+if ! curl -sSL --fail --connect-timeout 10 -o "$WEB_TMP/repo.tar.gz" "$TARBALL"; then
+  wget -q --no-check-certificate --timeout=15 -O "$WEB_TMP/repo.tar.gz" "$TARBALL"
+fi
+tar -xzf "$WEB_TMP/repo.tar.gz" -C "$WEB_TMP"
+WEB_SRC="$WEB_TMP/ServerStatus-${BRANCH}/web/dist"
+if [[ -d "$WEB_SRC" ]]; then
+  mkdir -p "$WEB_DIR"
+  cp -r "$WEB_SRC"/. "$WEB_DIR/"
+  find "$WEB_DIR" -name '._*' -delete
+  chown -R root:root "$WEB_DIR"
+  for f in "$WEB_DIR"/js/*.js "$WEB_DIR"/css/*.css; do
+    [[ -f "$f" ]] || continue
+    base=$(basename "$f")
+    if ! grep -q "$base" "$WEB_DIR/index.html"; then
+      rm -f "$f"
+    fi
+  done
+  echo "   前端已更新（web: ${WEB_DIR}）"
+else
+  echo "   警告: 未找到 web/dist，跳过前端更新"
 fi
 
 echo ">> 安装 systemd 服务 ..."
