@@ -176,6 +176,10 @@ int CMain::HandleMessage(int ClientNetID, char *pMessage)
 			json_value *pCustom = json_parse_ex(&CustomSettings, pClient->m_Stats.m_aCustom, strlen(pClient->m_Stats.m_aCustom), aCustomError);
 			if(pCustom)
 			{
+				// 客户端上报的显示名（--name），user 仅作内部标识
+				const json_value &rName = (*pCustom)["name"];
+				if(rName.type == json_string && rName.u.string.ptr[0])
+					str_copy(pClient->m_aName, rName.u.string.ptr, sizeof(pClient->m_aName));
 				const json_value &rPing = (*pCustom)["ping"];
 				if(rPing.type == json_object)
 				{

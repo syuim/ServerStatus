@@ -48,6 +48,8 @@ LOCATION_REFRESH = 21600  # 位置信息刷新间隔（秒），6 小时
 TRAFFIC_RESET_DAY = 1
 # 周期流量配额（字节，0=不限制），前端按上下行总和展示进度条
 TRAFFIC_QUOTA = 0
+# 显示名（前端节点名称），由 client-install.sh --name 注入；留空则取主机名
+NODE_NAME = ""
 TRAFFIC_STATE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'traffic.json')
 
 _location = None
@@ -108,7 +110,7 @@ def get_custom():
                     cores += 1
     except IOError:
         pass
-    data = {'os': get_os(), 'cpu_model': cpu_model, 'cores': cores, 'tags': TAGS, 'loc': get_location()}
+    data = {'name': NODE_NAME or socket.gethostname(), 'os': get_os(), 'cpu_model': cpu_model, 'cores': cores, 'tags': TAGS, 'loc': get_location()}
     data['traffic'] = traffic_tracker.summary()
     if PING_TARGETS:
         data['ping'] = ping_collector.summary()

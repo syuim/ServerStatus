@@ -79,6 +79,7 @@ sed -i "s|^SERVER = .*|SERVER = \"${SERVER}\"|" "$DIR/status-client.py"
 sed -i "s|^PORT = .*|PORT = ${PORT}|" "$DIR/status-client.py"
 sed -i "s|^USER = .*|USER = \"${SS_USER}\"|" "$DIR/status-client.py"
 sed -i "s|^PASSWORD = .*|PASSWORD = \"${KEY}\"|" "$DIR/status-client.py"
+sed -i "s|^NODE_NAME = .*|NODE_NAME = \"${NAME}\"|" "$DIR/status-client.py"
 sed -i "s|^TRAFFIC_RESET_DAY = .*|TRAFFIC_RESET_DAY = ${TRAFFIC_RESET_DAY}|" "$DIR/status-client.py"
 
 # 周期流量配额: 支持纯数字(字节)或 500M / 2G / 1T 格式
