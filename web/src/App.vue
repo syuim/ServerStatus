@@ -1,7 +1,9 @@
 <template>
   <the-error v-show="error"/>
   <div class="container">
-    <servers-table :servers="servers || []" :history="history" :loading="loading"/>
+    <div class="table-wrap">
+      <servers-table :servers="servers || []" :history="history" :loading="loading"/>
+    </div>
     <update-time :updated="updated"/>
   </div>
 </template>
@@ -236,12 +238,20 @@ div.bar {
   }
 }
 
-/* 移动端只保留: 运行状态 / 节点名 / 网络 / CPU */
+/* 表格滚动容器：窄屏时横向滚动不破坏表格布局 */
+.table-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
 @media only screen and (max-width: 720px) {
-  #table {
-    overflow-x: auto;
-    display: block;
-    -webkit-overflow-scrolling: touch;
+  .table-wrap {
+    margin: 0 -.8rem;
+  }
+
+  .table-wrap #table {
+    width: 100%;
+    min-width: 100%;
   }
 
   #location, tr td:nth-child(4) {
