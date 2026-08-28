@@ -141,8 +141,13 @@ export default defineComponent({
     const cpuModel = computed(() => {
       const d = customData.value;
       if (!d || !d.cpu_model) return '–';
-      const model = d.cpu_model.replace(/\s*\d+\s*[-–]?\s*Core\s*Processor$/i, '').trim();
-      const cores = d.cores ? ` ${d.cores} Virtual Core${d.cores > 1 ? 's' : ''}` : '';
+      const model = d.cpu_model
+        .replace(/\s*CPU\s*@\s*[\d.]+GHz\s*/i, '')
+        .replace(/\s*\d+\s*[-–]?\s*Core\s*Processor$/i, '')
+        .replace(/^Intel\(R\)\s*/i, '')
+        .replace(/\s*CPU\s*$/i, '')
+        .trim();
+      const cores = d.cores ? ` ${d.cores} vCore${d.cores > 1 ? 's' : ''}` : '';
       return `${model}${cores}`;
     });
     const osName = computed(() => {
@@ -473,5 +478,27 @@ tr td {
   font-weight: bold;
   border: none !important;
   white-space: nowrap;
+}
+
+/* 移动端：展开行 CPU 文字换行、图表不超屏 */
+@media (max-width: 720px) {
+  #expand_cpu {
+    white-space: normal;
+    word-break: break-word;
+    max-width: calc(100vw - 2rem);
+  }
+
+  .expand-inner {
+    max-width: calc(100vw - 2rem);
+  }
+
+  .ping-chart-wrap {
+    max-width: 100%;
+    overflow: hidden;
+  }
+
+  :deep(.ping-chart) {
+    max-width: 100%;
+  }
 }
 </style>

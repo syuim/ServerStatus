@@ -95,7 +95,7 @@ if ! command -v caddy >/dev/null 2>&1; then
 fi
 # 缓存策略：html/json no-cache（页面与状态实时），js/css 长缓存（文件名带 hash）
 if [[ -n "$SERVER_HOST" ]]; then
-  CADDY_SITE="${SERVER_HOST}:${WEB_PORT} {"
+  CADDY_SITE="http://${SERVER_HOST}:${WEB_PORT} {"
 else
   CADDY_SITE=":${WEB_PORT} {"
 fi
