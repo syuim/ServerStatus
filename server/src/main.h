@@ -19,10 +19,26 @@ public:
 	CConfig();
 };
 
+#define PING_HISTORY_MAX 1440
+
 class CMain
 {
+public:
+	// 每节点每探测线一条，key 为 "节点名:线名"（如 "RN:CT"），1440 点 = 24h @ 60s
+	struct CPingLine
+	{
+		char m_aName[64];
+		int m_Count;
+		int aT[PING_HISTORY_MAX];
+		short aV[PING_HISTORY_MAX];
+	};
+
 	CConfig m_Config;
 	CServer m_Server;
+
+	CPingLine *m_apPingLines;
+	int m_PingLineCount;
+	int m_PingLineAlloc;
 
 	struct CClient
 	{
@@ -71,9 +87,13 @@ class CMain
 		CClient *pClients;
 		CConfig *pConfig;
 		volatile short m_ReloadRequired;
+		CMain *pMain;
 	} m_JSONUpdateThreadData;
 
 	static void JSONUpdateThread(void *pUser);
+	void AppendPing(const char *pNode, const char *pLine, int64 t, int v);
+	void WriteHistoryFile(const CConfig *pConfig);
+	void LoadHistoryFile(const CConfig *pConfig);
 public:
 	CMain(CConfig Config);
 

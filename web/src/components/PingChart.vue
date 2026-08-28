@@ -74,7 +74,8 @@ export default defineComponent({
         series: [{
           type: 'bar' as const,
           data,
-          barWidth: '55%',
+          barMaxWidth: 8,
+          barMinWidth: 2,
           itemStyle: { color: '#21BA45', borderRadius: [2, 2, 0, 0] }
         }]
       };

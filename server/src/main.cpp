@@ -1,4 +1,5 @@
 #define __STDC_FORMAT_MACROS
+#include <stdlib.h>
 #include <inttypes.h>
 #include <time.h>
 #include <detect.h>
@@ -45,6 +46,9 @@ CConfig::CConfig()
 
 CMain::CMain(CConfig Config) : m_Config(Config)
 {
+	m_apPingLines = 0;
+	m_PingLineCount = 0;
+	m_PingLineAlloc = 0;
 	mem_zero(m_aClients, sizeof(m_aClients));
 	for(int i = 0; i < NET_MAX_CLIENTS; i++)
 		m_aClients[i].m_ClientNetID = -1;
@@ -162,7 +166,35 @@ int CMain::HandleMessage(int ClientNetID, char *pMessage)
 		if(rStart["online6"].type && pClient->m_ClientNetType == NETTYPE_IPV4)
 			pClient->m_Stats.m_Online6 = rStart["online6"].u.boolean;
 		if(rStart["custom"].type == json_string)
+		{
 			str_copy(pClient->m_Stats.m_aCustom, rStart["custom"].u.string.ptr, sizeof(pClient->m_Stats.m_aCustom));
+
+			// 提取 ping 历史（客户端只上报每线最新一点 + 时间戳）
+			json_settings CustomSettings;
+			mem_zero(&CustomSettings, sizeof(CustomSettings));
+			char aCustomError[256];
+			json_value *pCustom = json_parse_ex(&CustomSettings, pClient->m_Stats.m_aCustom, strlen(pClient->m_Stats.m_aCustom), aCustomError);
+			if(pCustom)
+			{
+				const json_value &rPing = (*pCustom)["ping"];
+				if(rPing.type == json_object)
+				{
+					int64 t = rPing["t"].u.integer;
+					for(unsigned i = 0; i < rPing.u.object.length; i++)
+					{
+						const char *pName = rPing.u.object.values[i].name;
+						if(!str_comp(pName, "t") || !str_comp(pName, "iv"))
+							continue;
+						const json_value &rArr = *rPing.u.object.values[i].value;
+						if(rArr.type != json_array || rArr.u.array.length == 0)
+							continue;
+						const json_value &rLast = *rArr.u.array.values[rArr.u.array.length - 1];
+						AppendPing(pClient->m_aName, pName, t, (int)rLast.u.integer);
+					}
+				}
+				json_value_free(pCustom);
+			}
+		}
 
 		if(m_Config.m_Verbose)
 		{
@@ -204,11 +236,169 @@ int CMain::HandleMessage(int ClientNetID, char *pMessage)
 	return 1;
 }
 
+void CMain::AppendPing(const char *pNode, const char *pLine, int64 t, int v)
+{
+	char aKey[96];
+	str_format(aKey, sizeof(aKey), "%s:%s", pNode, pLine);
+
+	CPingLine *pTarget = 0;
+	for(int i = 0; i < m_PingLineCount; i++)
+	{
+		if(!str_comp(m_apPingLines[i].m_aName, aKey))
+		{
+			pTarget = &m_apPingLines[i];
+			break;
+		}
+	}
+
+	if(!pTarget)
+	{
+		if(m_PingLineCount == m_PingLineAlloc)
+		{
+			int NewAlloc = m_PingLineAlloc ? m_PingLineAlloc * 2 : 4;
+			m_apPingLines = (CPingLine *)realloc(m_apPingLines, NewAlloc * sizeof(CPingLine));
+			m_PingLineAlloc = NewAlloc;
+		}
+		pTarget = &m_apPingLines[m_PingLineCount++];
+		mem_zero(pTarget, sizeof(CPingLine));
+		str_copy(pTarget->m_aName, aKey, sizeof(pTarget->m_aName));
+	}
+
+	if(v < -1)
+		v = -1;
+	if(v > 32767)
+		v = 32767;
+
+	if(pTarget->m_Count && pTarget->aT[pTarget->m_Count-1] == t)
+		pTarget->aV[pTarget->m_Count-1] = (short)v; // 同一轮数据重发，仅更新最后一点
+	else
+	{
+		if(pTarget->m_Count >= PING_HISTORY_MAX)
+		{
+			mem_move(pTarget->aT, pTarget->aT+1, (PING_HISTORY_MAX-1) * sizeof(int));
+			mem_move(pTarget->aV, pTarget->aV+1, (PING_HISTORY_MAX-1) * sizeof(short));
+			pTarget->m_Count = PING_HISTORY_MAX-1;
+		}
+		pTarget->aT[pTarget->m_Count] = (int)t;
+		pTarget->aV[pTarget->m_Count] = (short)v;
+		pTarget->m_Count++;
+	}
+}
+
+void CMain::WriteHistoryFile(const CConfig *pConfig)
+{
+	char aBuf[256 * 1024];
+	char *pBuf = aBuf;
+	str_format(pBuf, sizeof(aBuf), "{\n\"ping\": {");
+	pBuf += strlen(pBuf);
+	for(int i = 0; i < m_PingLineCount; i++)
+	{
+		CPingLine &Line = m_apPingLines[i];
+		if(!Line.m_Count)
+			continue;
+		str_format(pBuf, sizeof(aBuf) - (pBuf - aBuf), "%s\n\"%s\": {\"t\": %d, \"iv\": 60, \"v\": [",
+			i ? "," : "", Line.m_aName, Line.aT[Line.m_Count-1]);
+		pBuf += strlen(pBuf);
+		for(int k = 0; k < Line.m_Count; k++)
+		{
+			str_format(pBuf, sizeof(aBuf) - (pBuf - aBuf), "%s%d", k ? "," : "", (int)Line.aV[k]);
+			pBuf += strlen(pBuf);
+		}
+		str_format(pBuf, sizeof(aBuf) - (pBuf - aBuf), "]}");
+		pBuf += strlen(pBuf);
+	}
+	str_format(pBuf, sizeof(aBuf) - (pBuf - aBuf), "\n},\n\"updated\": \"%lld\"\n}", (long long)time(0));
+	pBuf += strlen(pBuf);
+
+	char aPath[1024];
+	str_format(aPath, sizeof(aPath), "%sjson/history.json", pConfig->m_aWebDir);
+	char aTmp[1100];
+	str_format(aTmp, sizeof(aTmp), "%s~", aPath);
+	IOHANDLE File = io_open(aTmp, IOFLAG_WRITE);
+	if(!File)
+		return;
+	io_write(File, aBuf, (pBuf - aBuf));
+	io_flush(File);
+	io_close(File);
+	fs_rename(aTmp, aPath);
+}
+
+void CMain::LoadHistoryFile(const CConfig *pConfig)
+{
+	char aPath[1024];
+	str_format(aPath, sizeof(aPath), "%sjson/history.json", pConfig->m_aWebDir);
+	IOHANDLE File = io_open(aPath, IOFLAG_READ);
+	if(!File)
+		return;
+	int FileSize = (int)io_length(File);
+	char *pFileData = (char *)mem_alloc(FileSize + 1, 1);
+	io_read(File, pFileData, FileSize);
+	pFileData[FileSize] = 0;
+	io_close(File);
+
+	json_settings JsonSettings;
+	mem_zero(&JsonSettings, sizeof(JsonSettings));
+	char aError[256];
+	json_value *pJsonData = json_parse_ex(&JsonSettings, pFileData, strlen(pFileData), aError);
+	if(pJsonData)
+	{
+		const json_value &rPing = (*pJsonData)["ping"];
+		if(rPing.type == json_object)
+		{
+			for(unsigned i = 0; i < rPing.u.object.length; i++)
+			{
+				const char *pKey = rPing.u.object.values[i].name;
+				const json_value &rLine = *rPing.u.object.values[i].value;
+				if(rLine.type != json_object)
+					continue;
+				int64 t = rLine["t"].u.integer;
+				const json_value &rV = rLine["v"];
+				if(rV.type != json_array || rV.u.array.length == 0)
+					continue;
+
+				CPingLine *pTarget = 0;
+				for(int k = 0; k < m_PingLineCount; k++)
+				{
+					if(!str_comp(m_apPingLines[k].m_aName, pKey))
+					{
+						pTarget = &m_apPingLines[k];
+						break;
+					}
+				}
+				if(!pTarget)
+				{
+					if(m_PingLineCount == m_PingLineAlloc)
+					{
+						int NewAlloc = m_PingLineAlloc ? m_PingLineAlloc * 2 : 4;
+						m_apPingLines = (CPingLine *)realloc(m_apPingLines, NewAlloc * sizeof(CPingLine));
+						m_PingLineAlloc = NewAlloc;
+					}
+					pTarget = &m_apPingLines[m_PingLineCount++];
+					mem_zero(pTarget, sizeof(CPingLine));
+					str_copy(pTarget->m_aName, pKey, sizeof(pTarget->m_aName));
+				}
+
+				unsigned Start = rV.u.array.length > PING_HISTORY_MAX ? rV.u.array.length - PING_HISTORY_MAX : 0;
+				for(unsigned k = Start; k < rV.u.array.length; k++)
+				{
+					int v = (int)rV.u.array.values[k]->u.integer;
+					pTarget->aT[pTarget->m_Count] = (int)(t - (rV.u.array.length - 1 - k) * 60);
+					pTarget->aV[pTarget->m_Count] = (short)v;
+					pTarget->m_Count++;
+				}
+			}
+		}
+		json_value_free(pJsonData);
+	}
+	mem_free(pFileData);
+}
+
 void CMain::JSONUpdateThread(void *pUser)
 {
 	CJSONUpdateThreadData *m_pJSONUpdateThreadData = (CJSONUpdateThreadData *)pUser;
 	CClient *pClients = m_pJSONUpdateThreadData->pClients;
 	CConfig *pConfig = m_pJSONUpdateThreadData->pConfig;
+	int WriteCounter = 0;
 
 	while(gs_Running)
 	{
@@ -282,6 +472,8 @@ void CMain::JSONUpdateThread(void *pUser)
 		io_flush(File);
 		io_close(File);
 		fs_rename(aJSONFileTmp, pConfig->m_aJSONFile);
+		if((++WriteCounter % 10) == 0)
+			m_pJSONUpdateThreadData->pMain->WriteHistoryFile(pConfig);
 		thread_sleep(1000);
 	}
 	fs_remove(pConfig->m_aJSONFile);
@@ -387,6 +579,8 @@ int CMain::Run()
 	m_JSONUpdateThreadData.m_ReloadRequired = 2;
 	m_JSONUpdateThreadData.pClients = m_aClients;
 	m_JSONUpdateThreadData.pConfig = &m_Config;
+	m_JSONUpdateThreadData.pMain = this;
+	LoadHistoryFile(&m_Config);
 	void *LoadThread = thread_create(JSONUpdateThread, &m_JSONUpdateThreadData);
 	//thread_detach(LoadThread);
 

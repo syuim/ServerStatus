@@ -1,7 +1,7 @@
 <template>
   <the-error v-show="!servers"/>
   <div class="container">
-    <servers-table :servers="servers"/>
+    <servers-table :servers="servers" :history="history"/>
     <update-time :updated="updated"/>
   </div>
 </template>
@@ -15,6 +15,12 @@ import ServersTable from '@/components/ServersTable.vue';
 import UpdateTime from '@/components/UpdateTime.vue';
 import { BoxItem, StatusItem } from '@/types';
 
+interface PingHistoryEntry {
+  t: number;
+  iv: number;
+  v: number[];
+}
+
 export default defineComponent({
   name: 'App',
   components: {
@@ -24,19 +30,35 @@ export default defineComponent({
   },
   setup() {
     const servers = ref<Array<StatusItem | BoxItem>>();
+    const history = ref<Record<string, PingHistoryEntry>>({});
     const updated = ref<number>();
     const { interval } = window.__PRE_CONFIG__;
     let timer: number;
+    let historyTimer: number;
     const runFetch = () => axios.get('json/stats.json')
       .then(res => {
         servers.value = res.data.servers;
         updated.value = Number(res.data.updated);
       })
       .catch(err => console.log(err));
-    onMounted(() => (runFetch(), true) && (timer = setInterval(runFetch, interval * 1000)));
-    onBeforeUnmount(() => clearInterval(timer));
+    const runHistoryFetch = () => axios.get('json/history.json')
+      .then(res => {
+        history.value = res.data.ping || {};
+      })
+      .catch(() => { /* 旧服务端无 history.json 时忽略 */ });
+    onMounted(() => {
+      runFetch();
+      runHistoryFetch();
+      timer = setInterval(runFetch, interval * 1000);
+      historyTimer = setInterval(runHistoryFetch, 30000);
+    });
+    onBeforeUnmount(() => {
+      clearInterval(timer);
+      clearInterval(historyTimer);
+    });
     return {
       servers,
+      history,
       updated
     };
   }

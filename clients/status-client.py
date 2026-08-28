@@ -173,7 +173,10 @@ class PingCollector(object):
 
     def summary(self):
         with self.lock:
-            data = dict((name, list(values)) for name, values in self.results.items())
+            # 服务端持久化完整历史，这里只上报每线最新一点 + 时间戳
+            data = {}
+            for name, values in self.results.items():
+                data[name] = [values[-1]] if values else []
             data['t'] = self.last_ts or int(time.time())
             data['iv'] = PING_INTERVAL
             return data

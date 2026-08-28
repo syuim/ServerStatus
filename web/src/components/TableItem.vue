@@ -45,23 +45,6 @@
     <td colspan="11">
       <div class="expand-inner" :class="{collapsed}" :style="{'max-height': getStatus ? '' : '0'}">
         <div id="expand_cpu">CPU: {{ getStatus ? cpuModel : '–' }}</div>
-        <div id="expand_mem">内存信息: {{
-            getStatus ? `${expandRowByteConvert(server.memory_used * 1024)} / ${expandRowByteConvert(server.memory_total * 1024)}` : '–'
-          }}
-        </div>
-        <div id="expand_swap">交换分区: {{
-            getStatus ? `${expandRowByteConvert(server.swap_used * 1024)} / ${expandRowByteConvert(server.swap_total * 1024)}` : '–'
-          }}
-        </div>
-        <div id="expand_hdd">硬盘信息: {{
-            getStatus ? `${expandRowByteConvert(server.hdd_used * 1024 * 1024)} / ${expandRowByteConvert(server.hdd_total * 1024 * 1024)}` : '–'
-          }}
-        </div>
-        <div class="tag-line" v-if="getStatus && tags.length">
-          <span v-for="(tag, i) of tags" :key="i" class="tag" :class="'tag--' + (tag.color || 'grey')">{{
-              tag.text
-            }}</span>
-        </div>
         <div class="ping-panel" v-if="getStatus && currentSeries" @click.stop>
           <div class="ping-head">
             <div class="ping-tabs">
@@ -90,16 +73,10 @@ import useStatus from './useStatus';
 import PingChart from './PingChart.vue';
 import { StatusItem } from '@/types';
 
-interface CustomTag {
-  text: string;
-  color?: string;
-}
-
 interface CustomData {
   os?: string;
   cpu_model?: string;
   cores?: number;
-  tags?: CustomTag[];
   loc?: string;
   ping?: Record<string, number[]>;
 }
@@ -109,6 +86,10 @@ export default defineComponent({
   props: {
     server: {
       type: Object as PropType<StatusItem>,
+      default: () => ({})
+    },
+    history: {
+      type: Object as PropType<Record<string, {t: number; iv: number; v: number[]}>>,
       default: () => ({})
     }
   },
@@ -127,7 +108,9 @@ export default defineComponent({
     const cpuModel = computed(() => {
       const d = customData.value;
       if (!d || !d.cpu_model) return '–';
-      return d.cpu_model.replace(/\s*\d+\s*[-–]?\s*Core\s*Processor$/i, '').trim();
+      const model = d.cpu_model.replace(/\s*\d+\s*[-–]?\s*Core\s*Processor$/i, '').trim();
+      const cores = d.cores ? ` ${d.cores} Virtual Core${d.cores > 1 ? 's' : ''}` : '';
+      return `${model}${cores}`;
     });
     const osName = computed(() => {
       const d = customData.value;
@@ -136,10 +119,6 @@ export default defineComponent({
     const locationName = computed(() => {
       const d = customData.value;
       return (d && d.loc) ? d.loc : (props.server.location || '–');
-    });
-    const tags = computed<CustomTag[]>(() => {
-      const d = customData.value;
-      return d && Array.isArray(d.tags) ? d.tags : [];
     });
     const pingSeries = computed(() => {
       const d = customData.value;
@@ -153,8 +132,22 @@ export default defineComponent({
         .map(name => ({name, values: raw[name] as number[], startTs: t, iv}));
     });
     const activePing = ref('');
+    const historySeries = computed(() => {
+      const h = props.history;
+      if (!h || !props.server.name) return [];
+      const names = pingSeries.value.map(s => s.name);
+      if (!names.length) return [];
+      const out: Array<{ name: string; values: number[]; startTs: number; iv: number }> = [];
+      for (const name of names) {
+        const entry = h[`${props.server.name}:${name}`];
+        if (entry && Array.isArray(entry.v) && entry.v.length) {
+          out.push({ name, values: entry.v, startTs: entry.t || 0, iv: entry.iv || 60 });
+        }
+      }
+      return out;
+    });
     const currentSeries = computed(() => {
-      const list = pingSeries.value;
+      const list = historySeries.value.length ? historySeries.value : pingSeries.value;
       if (!list.length) return null;
       return list.find(s => s.name === activePing.value) || list[0];
     });
@@ -180,7 +173,6 @@ export default defineComponent({
       locationName,
       cpuModel,
       osName,
-      tags,
       pingSeries,
       activePing,
       currentSeries,

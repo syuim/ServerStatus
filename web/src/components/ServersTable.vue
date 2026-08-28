@@ -21,7 +21,7 @@
     use index for the key may cause performance issues when delete a server from array,
     but not a big matter and we cannot find a more suitable data for the unique key.
     -->
-    <table-item v-for="(server, index) of servers" :key="index" :server="server"/>
+    <table-item v-for="(server, index) of servers" :key="index" :server="server" :history="history"/>
     </tbody>
   </table>
 </template>
@@ -36,6 +36,10 @@ export default defineComponent({
     servers: {
       type: Array as PropType<Array<StatusItem>>,
       default: () => ([])
+    },
+    history: {
+      type: Object as PropType<Record<string, {t: number; iv: number; v: number[]}>>,
+      default: () => ({})
     }
   },
   components: {
