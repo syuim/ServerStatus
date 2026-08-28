@@ -1,0 +1,45 @@
+name: build-sergate
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'server/**'
+      - '.github/workflows/build-sergate.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build linux-amd64
+        run: |
+          cd server
+          mkdir -p obj
+          make clean >/dev/null 2>&1 || true
+          make -j"$(nproc)"
+          mv sergate ../sergate-linux-amd64
+
+      - name: Build linux-arm64
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq g++-aarch64-linux-gnu
+          cd server
+          make clean >/dev/null 2>&1 || true
+          make -j"$(nproc)" CC=aarch64-linux-gnu-gcc CXX=aarch64-linux-gnu-g++
+          mv sergate ../sergate-linux-arm64
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view latest >/dev/null 2>&1; then
+            gh release upload latest sergate-linux-amd64 sergate-linux-arm64 --clobber
+          else
+            gh release create latest sergate-linux-amd64 sergate-linux-arm64 \
+              --title "ServerStatus latest" --notes "GitHub Actions 自动构建产物"
+          fi

@@ -44,6 +44,9 @@
   <tr class="expandRow">
     <td colspan="11">
       <div class="expand-inner" :class="{collapsed}" :style="{'max-height': getStatus ? '' : '0'}">
+        <div class="tag-line" v-if="tags.length">
+          <span v-for="t in tags" :key="t.text" class="tag" :class="t.color ? `tag--${t.color}` : ''">{{ t.text }}</span>
+        </div>
         <div id="expand_cpu">CPU: {{ getStatus ? cpuModel : '–' }}</div>
         <div id="expand_mem">内存信息: {{
             getStatus ? `${expandRowByteConvert(server.memory_used * 1024)} / ${expandRowByteConvert(server.memory_total * 1024)}` : '–'
@@ -82,7 +85,7 @@
 </template>
 
 <script lang="ts">
-import { defineComponent, ref, computed, watch, PropType } from 'vue';
+import { defineComponent, ref, computed, watch, inject, PropType } from 'vue';
 import useStatus from './useStatus';
 import PingChart from './PingChart.vue';
 import { StatusItem } from '@/types';
@@ -92,6 +95,7 @@ interface CustomData {
   cpu_model?: string;
   cores?: number;
   loc?: string;
+  tags?: Array<{ text?: string; color?: string }>;
   ping?: Record<string, number[]>;
   traffic?: { pr?: number; pt?: number; tr?: number; tt?: number; rd?: number };
 }
@@ -110,6 +114,11 @@ export default defineComponent({
   },
   setup(props) {
     const collapsed = ref(true);
+    // 首次展开行时通知 App 拉取延迟历史，图表数据懒加载
+    const ensureHistory = inject<() => void>('ensureHistory');
+    watch(collapsed, (v) => {
+      if (!v && ensureHistory) ensureHistory();
+    });
     const utils = useStatus(props);
     const customData = computed<CustomData | null>(() => {
       const raw = props.server.custom;
@@ -130,6 +139,11 @@ export default defineComponent({
     const osName = computed(() => {
       const d = customData.value;
       return d && d.os ? d.os : '–';
+    });
+    const tags = computed(() => {
+      const d = customData.value;
+      if (!d || !Array.isArray(d.tags)) return [];
+      return d.tags.filter(t => t && t.text).map(t => ({ text: t.text, color: t.color || '' }));
     });
     const locationName = computed(() => {
       const d = customData.value;
@@ -214,6 +228,7 @@ export default defineComponent({
       locationName,
       cpuModel,
       osName,
+      tags,
       trafficPeriodText,
       trafficTotalText,
       pingSeries,

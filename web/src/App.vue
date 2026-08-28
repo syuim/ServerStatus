@@ -7,7 +7,7 @@
 </template>
 
 <script lang="ts">
-import { defineComponent, ref, onMounted, onBeforeUnmount } from 'vue';
+import { defineComponent, ref, onMounted, onBeforeUnmount, provide } from 'vue';
 import axios from 'axios';
 
 import TheError from '@/components/TheError.vue';
@@ -58,11 +58,18 @@ export default defineComponent({
         history.value = res.data.ping || {};
       })
       .catch(() => { /* 旧服务端无 history.json 时忽略 */ });
+    // 延迟历史懒加载：页面打开不请求，首次展开行时才拉取并启动轮询
+    const historyStarted = ref(false);
+    const ensureHistory = () => {
+      if (historyStarted.value) return;
+      historyStarted.value = true;
+      runHistoryFetch();
+      historyTimer = setInterval(runHistoryFetch, 30000);
+    };
+    provide('ensureHistory', ensureHistory);
     onMounted(() => {
       runFetch();
-      runHistoryFetch();
       timer = setInterval(runFetch, interval * 1000);
-      historyTimer = setInterval(runHistoryFetch, 30000);
     });
     onBeforeUnmount(() => {
       clearInterval(timer);
@@ -227,9 +234,9 @@ div.bar {
   }
 }
 
-/* 移动端只保留: 运行状态 / 节点名 / 服务器位置 / 网络 */
+/* 移动端只保留: 运行状态 / 节点名 / 网络 / CPU */
 @media only screen and (max-width: 720px) {
-  #cpu, tr td:nth-child(9) {
+  #location, tr td:nth-child(4) {
     display: none;
   }
 
