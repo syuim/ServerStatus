@@ -263,9 +263,11 @@ div.bar {
     overflow: hidden;
   }
 
-  /* 状态标记缩小为圆点 */
+  /* 状态标记缩小为圆点，列宽收窄给其他列腾空间 */
   #table tr.tableRow td:first-child {
-    padding: .3em .2em !important;
+    width: 24px;
+    min-width: 24px;
+    padding: .3em .1em !important;
   }
 
   #table tr.tableRow td:first-child div.progress {
@@ -287,6 +289,18 @@ div.bar {
 
   #table tr.tableRow td:first-child div.progress div.bar span {
     display: none;
+  }
+
+  /* CPU 和网络列自适应 */
+  #table tr.tableRow td:nth-child(7),
+  #table tr.tableRow td:nth-child(9) {
+    width: auto;
+    min-width: 0;
+  }
+
+  #table tr.tableRow td:nth-child(9) div.progress {
+    max-width: 80px;
+    min-width: 40px;
   }
 }
 </style>
