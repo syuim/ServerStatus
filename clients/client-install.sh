@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ServerStatus 客户端一键接入（从 GitHub 下载）
 # 用法: bash <(curl -sL https://raw.githubusercontent.com/syuim/ServerStatus/master/clients/client-install.sh)
-# 可用环境变量覆盖: SERVER / PORT / SS_USER / KEY / TAGS / NAME / TRAFFIC_RESET_DAY
+# 可用环境变量覆盖: SERVER / PORT / SS_USER / KEY / TAGS / NAME / TRAFFIC_RESET_DAY / TRAFFIC_QUOTA
 set -euo pipefail
 
 SERVER="${SERVER:-rn.127315.xyz}"
@@ -12,6 +12,7 @@ KEY="${KEY:-68f30717b2bf0a5d33ed7a53c8f40bff}"
 NAME="${NAME:-}"
 TAGS="${TAGS:-}"
 TRAFFIC_RESET_DAY="${TRAFFIC_RESET_DAY:-1}"
+TRAFFIC_QUOTA="${TRAFFIC_QUOTA:-0}"
 REPO="syuim/ServerStatus"
 BRANCH="master"
 RAW="https://raw.githubusercontent.com/${REPO}/${BRANCH}"
@@ -53,6 +54,16 @@ sed -i "s|^PORT = .*|PORT = ${PORT}|" "$DIR/status-client.py"
 sed -i "s|^USER = .*|USER = \"${SS_USER}\"|" "$DIR/status-client.py"
 sed -i "s|^PASSWORD = .*|PASSWORD = \"${KEY}\"|" "$DIR/status-client.py"
 sed -i "s|^TRAFFIC_RESET_DAY = .*|TRAFFIC_RESET_DAY = ${TRAFFIC_RESET_DAY}|" "$DIR/status-client.py"
+
+# 周期流量配额: 支持纯数字(字节)或 500M / 2G / 1T 格式
+QUOTA_BYTES="$TRAFFIC_QUOTA"
+case "$TRAFFIC_QUOTA" in
+  *[kK]) QUOTA_BYTES=$(( ${TRAFFIC_QUOTA%[kK]} * 1024 )) ;;
+  *[mM]) QUOTA_BYTES=$(( ${TRAFFIC_QUOTA%[mM]} * 1024 * 1024 )) ;;
+  *[gG]) QUOTA_BYTES=$(( ${TRAFFIC_QUOTA%[gG]} * 1024 * 1024 * 1024 )) ;;
+  *[tT]) QUOTA_BYTES=$(( ${TRAFFIC_QUOTA%[tT]} * 1024 * 1024 * 1024 * 1024 )) ;;
+esac
+sed -i "s|^TRAFFIC_QUOTA = .*|TRAFFIC_QUOTA = ${QUOTA_BYTES}|" "$DIR/status-client.py"
 
 if [[ -n "$TAGS" ]]; then
   # TAGS 格式: 文本:颜色,文本  例如 "RN:blue,9929,CMIN2"

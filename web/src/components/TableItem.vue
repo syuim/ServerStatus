@@ -44,9 +44,6 @@
   <tr class="expandRow">
     <td colspan="11">
       <div class="expand-inner" :class="{collapsed}" :style="{'max-height': getStatus ? '' : '0'}">
-        <div class="tag-line" v-if="tags.length">
-          <span v-for="t in tags" :key="t.text" class="tag" :class="t.color ? `tag--${t.color}` : ''">{{ t.text }}</span>
-        </div>
         <div id="expand_cpu">CPU: {{ getStatus ? cpuModel : '–' }}</div>
         <div id="expand_mem">内存信息: {{
             getStatus ? `${expandRowByteConvert(server.memory_used * 1024)} / ${expandRowByteConvert(server.memory_total * 1024)}` : '–'
@@ -60,8 +57,19 @@
             getStatus ? `${expandRowByteConvert(server.hdd_used * 1024 * 1024)} / ${expandRowByteConvert(server.hdd_total * 1024 * 1024)}` : '–'
           }}
         </div>
-        <div id="expand_traffic_period">周期流量: {{ getStatus ? trafficPeriodText : '–' }}</div>
-        <div id="expand_traffic_total">总流量: {{ getStatus ? trafficTotalText : '–' }}</div>
+        <div id="expand_traffic_period" class="traffic-row">
+          流量:
+          <template v-if="getStatus && trafficQuota">
+            <div class="traffic-bar" :class="trafficQuotaState">
+              <div class="traffic-bar__fill" :style="{'width': trafficQuotaPct + '%'}">{{ trafficQuotaPct }}%</div>
+            </div>
+            <span class="traffic-row__text">{{ trafficQuotaText }}</span>
+          </template>
+          <template v-else>{{ getStatus ? trafficPeriodText : '–' }}</template>
+        </div>
+        <div class="tag-line" v-if="tags.length">
+          <span v-for="t in tags" :key="t.text" class="tag" :class="t.color ? `tag--${t.color}` : ''">{{ t.text }}</span>
+        </div>
         <div class="ping-panel" v-if="getStatus && !collapsed && currentSeries" @click.stop>
           <div class="ping-head">
             <div class="ping-tabs">
@@ -97,8 +105,11 @@ interface CustomData {
   loc?: string;
   tags?: Array<{ text?: string; color?: string }>;
   ping?: Record<string, number[]>;
-  traffic?: { pr?: number; pt?: number; tr?: number; tt?: number; rd?: number };
+  traffic?: { pr?: number; pt?: number; tr?: number; tt?: number; rd?: number; q?: number };
 }
+
+// tab 显示顺序：默认展示 CU，CT 移到 CM 后
+const PING_ORDER = ['CU', 'CU6', 'CM', 'CM6', 'CT', 'CT6', 'CF', 'GO'];
 
 export default defineComponent({
   name: 'TableItem',
@@ -153,18 +164,33 @@ export default defineComponent({
       const d = customData.value;
       return d && d.traffic ? d.traffic : null;
     });
+    const trafficQuota = computed(() => {
+      const t = traffic.value;
+      return t && t.q && t.q > 0 ? t.q : 0;
+    });
+    const trafficSum = computed(() => {
+      const t = traffic.value;
+      return t ? (t.pr || 0) + (t.pt || 0) : 0;
+    });
+    const trafficQuotaPct = computed(() => {
+      const q = trafficQuota.value;
+      if (!q) return 0;
+      return Math.min(100, Math.round(trafficSum.value / q * 100));
+    });
+    const trafficQuotaState = computed(() => {
+      const p = trafficQuotaPct.value;
+      return p > 90 ? 'traffic-bar--error' : p > 70 ? 'traffic-bar--warning' : 'traffic-bar--success';
+    });
+    const trafficQuotaText = computed(() => {
+      if (!trafficQuota.value) return '';
+      const fmt = utils.expandRowByteConvert.value;
+      return `${fmt(trafficSum.value)} / ${fmt(trafficQuota.value)}`;
+    });
     const trafficPeriodText = computed(() => {
       const t = traffic.value;
       if (!t) return '–';
       const fmt = utils.expandRowByteConvert.value;
-      const day = t.rd && t.rd > 0 ? ` · 每月${t.rd}号重置` : '';
-      return `↑ ${fmt(t.pr || 0)} ↓ ${fmt(t.pt || 0)}${day}`;
-    });
-    const trafficTotalText = computed(() => {
-      const t = traffic.value;
-      if (!t) return '–';
-      const fmt = utils.expandRowByteConvert.value;
-      return `↑ ${fmt(t.tr || 0)} ↓ ${fmt(t.tt || 0)}`;
+      return `↑ ${fmt(t.pr || 0)} ↓ ${fmt(t.pt || 0)}`;
     });
     const pingSeries = computed(() => {
       const d = customData.value;
@@ -175,7 +201,12 @@ export default defineComponent({
       return Object.keys(raw)
         .filter(k => k !== 't' && k !== 'iv')
         .filter(k => Array.isArray(raw[k]) && (raw[k] as number[]).length)
-        .map(name => ({name, values: raw[name] as number[], startTs: t, iv}));
+        .map(name => ({name, values: raw[name] as number[], startTs: t, iv}))
+        .sort((a, b) => {
+          const ia = PING_ORDER.indexOf(a.name);
+          const ib = PING_ORDER.indexOf(b.name);
+          return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
+        });
     });
     const activePing = ref('');
     watch(
@@ -230,7 +261,10 @@ export default defineComponent({
       osName,
       tags,
       trafficPeriodText,
-      trafficTotalText,
+      trafficQuota,
+      trafficQuotaPct,
+      trafficQuotaState,
+      trafficQuotaText,
       pingSeries,
       activePing,
       currentSeries,
@@ -311,6 +345,50 @@ tr.expandRow td {
 .tag--yellow {
   background-color: #fbbd08;
   color: #fff;
+}
+
+.traffic-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: .6em;
+  flex-wrap: wrap;
+}
+
+.traffic-bar {
+  display: inline-block;
+  width: 140px;
+  height: 18px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, .1);
+  overflow: hidden;
+}
+
+.traffic-bar__fill {
+  height: 18px;
+  line-height: 18px;
+  border-radius: 6px;
+  font-size: .75rem;
+  color: #fff;
+  text-align: center;
+  white-space: nowrap;
+  transition: width .3s ease, background-color .3s ease;
+}
+
+.traffic-bar--success .traffic-bar__fill {
+  background: var(--hotaru-status-ok);
+}
+
+.traffic-bar--warning .traffic-bar__fill {
+  background: var(--hotaru-status-warn);
+}
+
+.traffic-bar--error .traffic-bar__fill {
+  background: var(--hotaru-status-bad);
+}
+
+.traffic-row__text {
+  white-space: nowrap;
 }
 
 .ping-panel {

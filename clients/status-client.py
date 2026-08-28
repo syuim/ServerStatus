@@ -44,6 +44,8 @@ LOCATION_REFRESH = 21600  # 位置信息刷新间隔（秒），6 小时
 
 # 周期流量每月几号重置（1-28 安全，大于当月天数时按当月最后一天）；总流量永久累计
 TRAFFIC_RESET_DAY = 1
+# 周期流量配额（字节，0=不限制），前端按上下行总和展示进度条
+TRAFFIC_QUOTA = 0
 TRAFFIC_STATE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'traffic.json')
 
 _location = None
@@ -318,6 +320,7 @@ class TrafficTracker(object):
             'tr': int(self.state['total_rx']),
             'tt': int(self.state['total_tx']),
             'rd': self.reset_day,
+            'q': TRAFFIC_QUOTA,
         }
 
 
