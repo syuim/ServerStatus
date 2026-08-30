@@ -6,7 +6,6 @@
           <use :xlink:href="`#${server.region}`"></use>
         </svg>
         <span> {{ server.name }} </span>
-        <p>{{ server.type }}</p>
       </div>
       <div class="ui tiny progress success">
         <div class="bar" :style="{width: getStatus ? `${getRAMStatus.toString()}%` : '0%'}">

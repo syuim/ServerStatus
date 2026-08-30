@@ -24,11 +24,9 @@ export default (props: Props) => {
   });
 
   const tableRowByteConvert = computed(() => (data: number): string => {
-    if (data < 1024) return data.toFixed(0) + 'B';
-    else if (data < 1024 * 1024) return (data / 1024).toFixed(0) + 'K';
-    else if (data < 1024 * 1024 * 1024) return (data / 1024 / 1024).toFixed(1) + 'M';
-    else if (data < 1024 * 1024 * 1024 * 1024) return (data / 1024 / 1024 / 1024).toFixed(2) + 'G';
-    else return (data / 1024 / 1024 / 1024 / 1024).toFixed(2) + 'T';
+    const kb = data / 1024;
+    if (kb < 1024) return kb.toFixed(0) + 'K';
+    else return (kb / 1024).toFixed(1) + 'M';
   });
 
   const expandRowByteConvert = computed(() => (data: number): string => {
