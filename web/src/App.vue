@@ -242,6 +242,8 @@ div.bar {
 .table-wrap {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
+  /* 表格不再贴着窗口标题栏 */
+  padding-top: 1em;
 }
 
 @media only screen and (max-width: 720px) {
