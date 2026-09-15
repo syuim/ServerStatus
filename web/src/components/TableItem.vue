@@ -432,6 +432,8 @@ tr.expandRow td {
 
 div.progress {
   display: inline-block;
+  /* 内联块按基线对齐会偏上，middle 才是相对行文字的垂直居中 */
+  vertical-align: middle;
   overflow: hidden;
   height: 22px;
   width: 100%;
