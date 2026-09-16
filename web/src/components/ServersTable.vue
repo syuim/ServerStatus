@@ -63,9 +63,24 @@ export default defineComponent({
   border-bottom: 1px solid rgba(34, 36, 38, .1);
 }
 
-/* 第一行数据与表头分隔线之间留出间隙 */
-#table tbody tr:first-child td {
-  padding-top: .85em !important;
+/* 第一行的背景块与表头分隔线留出空隙：
+   行背景改画在单元格上，用透明上边框占位，背景裁掉边框区域 */
+#table tbody tr.tableRow:first-child {
+  background-color: transparent;
+}
+
+#table tbody tr.tableRow:first-child:hover {
+  background-color: transparent;
+}
+
+#table tbody tr.tableRow:first-child td {
+  border-top: .85em solid transparent !important;
+  background-color: rgba(249, 249, 249, .8);
+  background-clip: padding-box;
+}
+
+#table tbody tr.tableRow:first-child:hover td {
+  background-color: rgba(243, 243, 243, .9);
 }
 
 tr.hotaru-skeleton td.hotaru-skeleton-td {
