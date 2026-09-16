@@ -16,39 +16,63 @@ const getYMax = (values: number[]) => {
   return Math.max(Math.ceil(Math.max(...valid) / 50) * 50, 100);
 };
 
-// hover 时在鼠标位置画一条竖线，左右移动时平滑过渡
-let targetX: number | null = null;
-let currentX: number | null = null;
-let rafId: number | null = null;
+// hover 时在鼠标位置画一条竖线，左右移动时平滑过渡（状态按图表实例隔离）
+interface GuideState {
+  targetX: number | null;
+  currentX: number | null;
+  rafId: number | null;
+}
 
-const easeGuide = (chart: Chart) => {
-  if (currentX === null || targetX === null) return;
-  const diff = targetX - currentX;
+const guideStates = new WeakMap<Chart, GuideState>();
+
+const easeGuide = (chart: Chart, state: GuideState) => {
+  if (state.currentX === null || state.targetX === null) {
+    // 动画被中断（如鼠标移出图表），必须复位 rafId，否则后续动画永远无法启动
+    state.rafId = null;
+    return;
+  }
+  const diff = state.targetX - state.currentX;
   if (Math.abs(diff) < 0.5) {
-    currentX = targetX;
+    state.currentX = state.targetX;
   } else {
-    currentX += diff * 0.22;
-    rafId = window.requestAnimationFrame(() => {
+    state.currentX += diff * 0.22;
+    state.rafId = window.requestAnimationFrame(() => {
       chart.draw();
-      easeGuide(chart);
+      easeGuide(chart, state);
     });
     return;
   }
   chart.draw();
-  rafId = null;
+  state.rafId = null;
+};
+
+const stopGuide = (chart: Chart) => {
+  const state = guideStates.get(chart);
+  if (state && state.rafId !== null) {
+    window.cancelAnimationFrame(state.rafId);
+    state.rafId = null;
+  }
 };
 
 const verticalGuide = {
   id: 'verticalGuide',
   afterDatasetsDraw(chart: Chart) {
+    const existing = guideStates.get(chart);
+    const state: GuideState = existing || { targetX: null, currentX: null, rafId: null };
+    if (!existing) guideStates.set(chart, state);
     const active = chart.tooltip?.getActiveElements?.() || [];
     const x = active.length ? active[0].element.x : null;
-    if (x !== targetX) {
-      targetX = x;
-      if (x !== null && currentX === null) currentX = x;
+    if (x !== state.targetX) {
+      state.targetX = x;
+      if (x === null) {
+        // 移出图表：复位位置，避免下次移入画出陈旧竖线
+        state.currentX = null;
+      } else if (state.currentX === null) {
+        state.currentX = x;
+      }
     }
-    if (currentX === null || targetX === null) return;
-    const guideX = Math.round(currentX) + 0.5;
+    if (state.currentX === null || state.targetX === null) return;
+    const guideX = Math.round(state.currentX) + 0.5;
     const { top, bottom } = chart.chartArea;
     const ctx = chart.ctx;
     ctx.save();
@@ -59,10 +83,10 @@ const verticalGuide = {
     ctx.strokeStyle = 'rgba(0, 0, 0, .25)';
     ctx.stroke();
     ctx.restore();
-    if (rafId === null && currentX !== targetX) {
-      rafId = window.requestAnimationFrame(() => {
+    if (state.rafId === null && state.currentX !== state.targetX) {
+      state.rafId = window.requestAnimationFrame(() => {
         chart.draw();
-        easeGuide(chart);
+        easeGuide(chart, state);
       });
     }
   }
@@ -194,11 +218,8 @@ export default defineComponent({
     );
 
     onBeforeUnmount(() => {
-      if (rafId !== null) {
-        cancelAnimationFrame(rafId);
-        rafId = null;
-      }
       if (chart) {
+        stopGuide(chart);
         chart.destroy();
         chart = null;
       }
