@@ -291,27 +291,32 @@ void CMain::AppendPing(const char *pNode, const char *pLine, int64 t, int v)
 
 void CMain::WriteHistoryFile(const CConfig *pConfig)
 {
-	char aBuf[256 * 1024];
+	// 堆分配最坏情况缓冲（行头 ≤256B + 每点 ≤5 位数字加逗号），
+	// 避免固定 256KB 栈缓冲在历史超限时静默截断写出损坏的 JSON
+	int BufSize = 1024 + m_PingLineCount * (256 + PING_HISTORY_MAX * 6);
+	char *aBuf = (char *)mem_alloc(BufSize, 1);
+	if(!aBuf)
+		return;
 	char *pBuf = aBuf;
-	str_format(pBuf, sizeof(aBuf), "{\n\"ping\": {");
+	str_format(pBuf, BufSize, "{\n\"ping\": {");
 	pBuf += strlen(pBuf);
 	for(int i = 0; i < m_PingLineCount; i++)
 	{
 		CPingLine &Line = m_apPingLines[i];
 		if(!Line.m_Count)
 			continue;
-		str_format(pBuf, sizeof(aBuf) - (pBuf - aBuf), "%s\n\"%s\": {\"t\": %d, \"iv\": 60, \"v\": [",
+		str_format(pBuf, BufSize - (int)(pBuf - aBuf), "%s\n\"%s\": {\"t\": %d, \"iv\": 60, \"v\": [",
 			i ? "," : "", Line.m_aName, Line.aT[Line.m_Count-1]);
 		pBuf += strlen(pBuf);
 		for(int k = 0; k < Line.m_Count; k++)
 		{
-			str_format(pBuf, sizeof(aBuf) - (pBuf - aBuf), "%s%d", k ? "," : "", (int)Line.aV[k]);
+			str_format(pBuf, BufSize - (int)(pBuf - aBuf), "%s%d", k ? "," : "", (int)Line.aV[k]);
 			pBuf += strlen(pBuf);
 		}
-		str_format(pBuf, sizeof(aBuf) - (pBuf - aBuf), "]}");
+		str_format(pBuf, BufSize - (int)(pBuf - aBuf), "]}");
 		pBuf += strlen(pBuf);
 	}
-	str_format(pBuf, sizeof(aBuf) - (pBuf - aBuf), "\n},\n\"updated\": \"%lld\"\n}", (long long)time(0));
+	str_format(pBuf, BufSize - (int)(pBuf - aBuf), "\n},\n\"updated\": \"%lld\"\n}", (long long)time(0));
 	pBuf += strlen(pBuf);
 
 	char aPath[1024];
@@ -320,11 +325,15 @@ void CMain::WriteHistoryFile(const CConfig *pConfig)
 	str_format(aTmp, sizeof(aTmp), "%s~", aPath);
 	IOHANDLE File = io_open(aTmp, IOFLAG_WRITE);
 	if(!File)
+	{
+		mem_free(aBuf);
 		return;
+	}
 	io_write(File, aBuf, (pBuf - aBuf));
 	io_flush(File);
 	io_close(File);
 	fs_rename(aTmp, aPath);
+	mem_free(aBuf);
 }
 
 void CMain::LoadHistoryFile(const CConfig *pConfig)
