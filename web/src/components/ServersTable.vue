@@ -61,10 +61,9 @@ export default defineComponent({
   color: var(--hotaru-faint);
   white-space: nowrap;
   border-bottom: 1px solid rgba(34, 36, 38, .1);
-  /* 列标题与第一行数据之间留出间隙 */
-  padding-bottom: 1.3em !important;
 }
 
+/* 第一行数据与表头分隔线之间留出间隙 */
 #table tbody tr:first-child td {
   padding-top: .85em !important;
 }
